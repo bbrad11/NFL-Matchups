@@ -11,7 +11,7 @@ st.markdown("Find the best matchups by tracking which defenses give up the most 
 
 # Sidebar controls
 st.sidebar.header("Settings")
-season = st.sidebar.selectbox("Season", [2025, 2024, 2023], index=0)
+season = st.sidebar.selectbox("Season", [2025, 2024], index=0)
 current_week = st.sidebar.slider("Week", 1, 18, 7)
 
 # Cache data loading
@@ -58,7 +58,7 @@ def get_defense_stats(stats_df, position_codes):
 # TABS
 # ============================================================
 
-tab1, tab2, tab3 = st.tabs(["🛡️ Worst Defenses", "🔥 This Week's Matchups", "🏆 Top Scorers"])
+tab1, tab2, tab3, tab4 = st.tabs(["🛡️ Worst Defenses", "🔥 This Week's Matchups", "🏆 Top Scorers", "📈 DFS Insights"])
 
 # ============================================================
 # TAB 1: WORST DEFENSES
