@@ -77,9 +77,24 @@ with tab1:
     st.header("Which Defenses Give Up The Most?")
     st.markdown("Higher numbers = easier matchup for offensive players")
     
+    # Add filter option
+    time_filter = st.radio(
+        "Show stats for:",
+        ["Season Total", "This Week Only", "Last 3 Weeks"],
+        horizontal=True
+    )
+    
     position = st.selectbox("Position", ["QB", "RB", "WR", "TE"])
     
-    defense_stats = get_defense_stats(stats_df, positions[position])
+    # Filter data based on selection
+    if time_filter == "This Week Only":
+        filtered_df = stats_df[stats_df['week'] == current_week]
+    elif time_filter == "Last 3 Weeks":
+        filtered_df = stats_df[stats_df['week'] >= current_week - 2]
+    else:  # Season Total
+        filtered_df = stats_df
+    
+    defense_stats = get_defense_stats(filtered_df, positions[position])
     
     if defense_stats.empty:
         st.warning(f"No {position} data available for {season}")
@@ -172,6 +187,14 @@ with tab2:
 
 with tab3:
     st.header("Season Leaders")
+    
+    # Add time filter
+    time_filter_leaders = st.radio(
+        "Show leaders for:",
+        ["Season Total", "This Week Only", "Last 3 Weeks"],
+        horizontal=True,
+        key="leaders_time_filter"
+    )
     
     sort_option = st.radio(
         "Show leaders by:",
@@ -274,18 +297,26 @@ with tab3:
         
         return leaders
     
+    # Filter data based on time selection
+    if time_filter_leaders == "This Week Only":
+        filtered_leaders_df = stats_df[stats_df['week'] == current_week]
+    elif time_filter_leaders == "Last 3 Weeks":
+        filtered_leaders_df = stats_df[stats_df['week'] >= current_week - 2]
+    else:  # Season Total
+        filtered_leaders_df = stats_df
+    
     col1, col2 = st.columns(2)
     
     with col1:
         st.subheader("🎯 Quarterbacks")
-        qb_leaders = get_leaders(stats_df, positions['QB'])
+        qb_leaders = get_leaders(filtered_leaders_df, positions['QB'])
         if not qb_leaders.empty:
             st.dataframe(qb_leaders, use_container_width=True, hide_index=True)
         else:
             st.info("No QB data available")
         
         st.subheader("🏃 Running Backs")
-        rb_leaders = get_leaders(stats_df, positions['RB'])
+        rb_leaders = get_leaders(filtered_leaders_df, positions['RB'])
         if not rb_leaders.empty:
             st.dataframe(rb_leaders, use_container_width=True, hide_index=True)
         else:
@@ -293,14 +324,14 @@ with tab3:
     
     with col2:
         st.subheader("📡 Wide Receivers")
-        wr_leaders = get_leaders(stats_df, positions['WR'])
+        wr_leaders = get_leaders(filtered_leaders_df, positions['WR'])
         if not wr_leaders.empty:
             st.dataframe(wr_leaders, use_container_width=True, hide_index=True)
         else:
             st.info("No WR data available")
         
         st.subheader("🎣 Tight Ends")
-        te_leaders = get_leaders(stats_df, positions['TE'])
+        te_leaders = get_leaders(filtered_leaders_df, positions['TE'])
         if not te_leaders.empty:
             st.dataframe(te_leaders, use_container_width=True, hide_index=True)
         else:
