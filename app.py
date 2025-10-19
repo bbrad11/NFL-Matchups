@@ -38,7 +38,17 @@ positions = {
 # Function to analyze defense vs position
 def analyze_defense_vs_position(stats_df, position_codes, stat_columns):
     pos_stats = stats_df[stats_df['position'].isin(position_codes)].copy()
-    defense_stats = pos_stats.groupby('opponent_team').agg(stat_columns).reset_index()
+    
+    # Filter stat_columns to only include columns that exist
+    filtered_stat_columns = {}
+    for col, aggs in stat_columns.items():
+        if col in pos_stats.columns:
+            filtered_stat_columns[col] = aggs
+    
+    if not filtered_stat_columns:
+        return pd.DataFrame()
+    
+    defense_stats = pos_stats.groupby('opponent_team').agg(filtered_stat_columns).reset_index()
     defense_stats.columns = ['Defense'] + [col[0] + '_' + col[1] for col in defense_stats.columns[1:]]
     return defense_stats
 
@@ -50,6 +60,11 @@ tab1, tab2, tab3 = st.tabs(["🛡️ Defense Weaknesses", "🔥 Matchup Analysis
 
 with tab1:
     st.header("Defensive Positional Weaknesses")
+    
+    # Debug: Show available columns
+    with st.expander("🔍 Debug: Available Columns"):
+        st.write("All columns in dataset:")
+        st.write(stats_df.columns.tolist())
     
     position_select = st.selectbox("Select Position", ["QB", "RB", "WR", "TE"])
     
@@ -64,18 +79,30 @@ with tab1:
                 'fantasy_points_ppr': ['sum', 'mean']
             }
         )
-        qb_defense = qb_defense.sort_values('passing_tds_sum', ascending=False)
         
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Worst Defenses vs QB (by TDs)")
-            st.dataframe(qb_defense.head(10), use_container_width=True)
-        with col2:
-            st.subheader("Best Defenses vs QB (by TDs)")
-            st.dataframe(qb_defense.tail(10).iloc[::-1], use_container_width=True)
-        
-        # Chart
-        st.bar_chart(qb_defense.head(15).set_index('Defense')['passing_tds_sum'])
+        if qb_defense.empty:
+            st.warning("No QB data available. Check the debug section above to see available columns.")
+        else:
+            # Find the best sorting column
+            sort_col = None
+            for col in ['passing_tds_sum', 'passing_yards_sum', 'fantasy_points_ppr_sum']:
+                if col in qb_defense.columns:
+                    sort_col = col
+                    break
+            
+            if sort_col:
+                qb_defense = qb_defense.sort_values(sort_col, ascending=False)
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.subheader("Worst Defenses vs QB (by TDs)")
+                    st.dataframe(qb_defense.head(10), use_container_width=True)
+                with col2:
+                    st.subheader("Best Defenses vs QB (by TDs)")
+                    st.dataframe(qb_defense.tail(10).iloc[::-1], use_container_width=True)
+                
+                # Chart
+                st.bar_chart(qb_defense.head(15).set_index('Defense')[sort_col])
     
     elif position_select == "RB":
         rb_defense = analyze_defense_vs_position(
@@ -88,18 +115,32 @@ with tab1:
                 'fantasy_points_ppr': ['sum', 'mean']
             }
         )
-        rb_defense['total_tds'] = rb_defense['rushing_tds_sum'] + rb_defense['receiving_tds_sum']
-        rb_defense = rb_defense.sort_values('total_tds', ascending=False)
         
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Worst Defenses vs RB")
-            st.dataframe(rb_defense.head(10), use_container_width=True)
-        with col2:
-            st.subheader("Best Defenses vs RB")
-            st.dataframe(rb_defense.tail(10).iloc[::-1], use_container_width=True)
-        
-        st.bar_chart(rb_defense.head(15).set_index('Defense')['total_tds'])
+        if rb_defense.empty:
+            st.warning("No RB data available. Check the debug section above to see available columns.")
+        else:
+            # Calculate total TDs if both columns exist
+            if 'rushing_tds_sum' in rb_defense.columns and 'receiving_tds_sum' in rb_defense.columns:
+                rb_defense['total_tds'] = rb_defense['rushing_tds_sum'] + rb_defense['receiving_tds_sum']
+                sort_col = 'total_tds'
+            elif 'rushing_tds_sum' in rb_defense.columns:
+                sort_col = 'rushing_tds_sum'
+            elif 'fantasy_points_ppr_sum' in rb_defense.columns:
+                sort_col = 'fantasy_points_ppr_sum'
+            else:
+                sort_col = rb_defense.columns[1]  # Use first available stat column
+            
+            rb_defense = rb_defense.sort_values(sort_col, ascending=False)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Worst Defenses vs RB")
+                st.dataframe(rb_defense.head(10), use_container_width=True)
+            with col2:
+                st.subheader("Best Defenses vs RB")
+                st.dataframe(rb_defense.tail(10).iloc[::-1], use_container_width=True)
+            
+            st.bar_chart(rb_defense.head(15).set_index('Defense')[sort_col])
     
     elif position_select == "WR":
         wr_defense = analyze_defense_vs_position(
@@ -112,17 +153,22 @@ with tab1:
                 'fantasy_points_ppr': ['sum', 'mean']
             }
         )
-        wr_defense = wr_defense.sort_values('receiving_tds_sum', ascending=False)
         
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Worst Defenses vs WR")
-            st.dataframe(wr_defense.head(10), use_container_width=True)
-        with col2:
-            st.subheader("Best Defenses vs WR")
-            st.dataframe(wr_defense.tail(10).iloc[::-1], use_container_width=True)
-        
-        st.bar_chart(wr_defense.head(15).set_index('Defense')['receiving_tds_sum'])
+        if wr_defense.empty:
+            st.warning("No WR data available. Check the debug section above to see available columns.")
+        else:
+            sort_col = 'receiving_tds_sum' if 'receiving_tds_sum' in wr_defense.columns else wr_defense.columns[1]
+            wr_defense = wr_defense.sort_values(sort_col, ascending=False)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Worst Defenses vs WR")
+                st.dataframe(wr_defense.head(10), use_container_width=True)
+            with col2:
+                st.subheader("Best Defenses vs WR")
+                st.dataframe(wr_defense.tail(10).iloc[::-1], use_container_width=True)
+            
+            st.bar_chart(wr_defense.head(15).set_index('Defense')[sort_col])
     
     else:  # TE
         te_defense = analyze_defense_vs_position(
@@ -135,17 +181,22 @@ with tab1:
                 'fantasy_points_ppr': ['sum', 'mean']
             }
         )
-        te_defense = te_defense.sort_values('receiving_tds_sum', ascending=False)
         
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Worst Defenses vs TE")
-            st.dataframe(te_defense.head(10), use_container_width=True)
-        with col2:
-            st.subheader("Best Defenses vs TE")
-            st.dataframe(te_defense.tail(10).iloc[::-1], use_container_width=True)
-        
-        st.bar_chart(te_defense.head(15).set_index('Defense')['receiving_tds_sum'])
+        if te_defense.empty:
+            st.warning("No TE data available. Check the debug section above to see available columns.")
+        else:
+            sort_col = 'receiving_tds_sum' if 'receiving_tds_sum' in te_defense.columns else te_defense.columns[1]
+            te_defense = te_defense.sort_values(sort_col, ascending=False)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Worst Defenses vs TE")
+                st.dataframe(te_defense.head(10), use_container_width=True)
+            with col2:
+                st.subheader("Best Defenses vs TE")
+                st.dataframe(te_defense.tail(10).iloc[::-1], use_container_width=True)
+            
+            st.bar_chart(te_defense.head(15).set_index('Defense')[sort_col])
 
 # ============================================================
 # TAB 2: MATCHUP ANALYSIS
@@ -210,7 +261,10 @@ with tab2:
 with tab3:
     st.header("🏆 Touchdown Leaders")
     
-    def get_td_leaders(df, position_list, position_name):
+    # Add sorting option
+    sort_by = st.radio("Sort by:", ["Most TDs", "Most Yards", "Most Receptions"], horizontal=True)
+    
+    def get_td_leaders(df, position_list, position_name, sort_preference):
         pos_df = df[df['position'].isin(position_list)].copy()
         
         # Check which columns exist
@@ -253,7 +307,14 @@ with tab3:
                 pos_df['total_tds'] = pos_df['passing_tds']
             else:
                 pos_df['total_tds'] = 0
-            sort_col = 'passing_tds' if has_passing else 'total_tds'
+            
+            # Auto-sort by most relevant stat
+            if sort_preference == "Most TDs":
+                sort_col = 'passing_tds' if has_passing else 'total_tds'
+            elif sort_preference == "Most Yards":
+                sort_col = 'passing_yards' if 'passing_yards' in pos_df.columns else 'total_tds'
+            else:
+                sort_col = 'passing_tds' if has_passing else 'total_tds'
         else:
             tds = []
             if has_rushing:
@@ -261,7 +322,19 @@ with tab3:
             if has_receiving:
                 tds.append(pos_df['receiving_tds'])
             pos_df['total_tds'] = sum(tds) if tds else 0
-            sort_col = 'total_tds'
+            
+            # Auto-sort by most relevant stat
+            if sort_preference == "Most TDs":
+                sort_col = 'total_tds'
+            elif sort_preference == "Most Yards":
+                if 'receiving_yards' in pos_df.columns:
+                    sort_col = 'receiving_yards'
+                elif 'rushing_yards' in pos_df.columns:
+                    sort_col = 'rushing_yards'
+                else:
+                    sort_col = 'total_tds'
+            else:  # Most Receptions
+                sort_col = 'receptions' if 'receptions' in pos_df.columns else 'total_tds'
         
         agg_dict['total_tds'] = 'sum'
         
@@ -277,7 +350,7 @@ with tab3:
     
     with col1:
         st.subheader("🎯 QB Leaders")
-        qb_tds = get_td_leaders(stats_df, positions['QB'], "QB")
+        qb_tds = get_td_leaders(stats_df, positions['QB'], "QB", sort_by)
         if not qb_tds.empty:
             display_cols = ['player_display_name']
             for col in ['recent_team', 'team', 'team_abbr']:
@@ -290,7 +363,7 @@ with tab3:
             st.dataframe(qb_tds[display_cols], use_container_width=True)
         
         st.subheader("🏃 RB Leaders")
-        rb_tds = get_td_leaders(stats_df, positions['RB'], "RB")
+        rb_tds = get_td_leaders(stats_df, positions['RB'], "RB", sort_by)
         if not rb_tds.empty:
             display_cols = ['player_display_name']
             for col in ['recent_team', 'team', 'team_abbr']:
@@ -304,7 +377,7 @@ with tab3:
     
     with col2:
         st.subheader("📡 WR Leaders")
-        wr_tds = get_td_leaders(stats_df, positions['WR'], "WR")
+        wr_tds = get_td_leaders(stats_df, positions['WR'], "WR", sort_by)
         if not wr_tds.empty:
             display_cols = ['player_display_name']
             for col in ['recent_team', 'team', 'team_abbr']:
@@ -317,7 +390,7 @@ with tab3:
             st.dataframe(wr_tds[display_cols], use_container_width=True)
         
         st.subheader("🎣 TE Leaders")
-        te_tds = get_td_leaders(stats_df, positions['TE'], "TE")
+        te_tds = get_td_leaders(stats_df, positions['TE'], "TE", sort_by)
         if not te_tds.empty:
             display_cols = ['player_display_name']
             for col in ['recent_team', 'team', 'team_abbr']:
