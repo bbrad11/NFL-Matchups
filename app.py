@@ -3,11 +3,86 @@ import nflreadpy as nfl
 import pandas as pd
 
 # Page config
-st.set_page_config(page_title="NFL Matchup Analyzer", page_icon="🏈", layout="wide")
+st.set_page_config(
+    page_title="NFL Matchup Analyzer", 
+    page_icon="🏈", 
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Title
-st.title("🏈 NFL Matchup Analyzer")
-st.markdown("Find the best matchups by tracking which defenses give up the most points")
+# Custom CSS for modern look
+st.markdown("""
+<style>
+    /* Main title styling */
+    .main h1 {
+        color: #1E3A8A;
+        font-size: 3rem !important;
+        font-weight: 800 !important;
+        margin-bottom: 0.5rem !important;
+    }
+    
+    /* Metric cards */
+    [data-testid="stMetricValue"] {
+        font-size: 2rem;
+        font-weight: 700;
+    }
+    
+    /* Tabs styling */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        background-color: #F3F4F6;
+        border-radius: 8px;
+        padding: 0 24px;
+        font-weight: 600;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #1E3A8A;
+        color: white;
+    }
+    
+    /* Dataframe styling */
+    .dataframe {
+        border-radius: 8px;
+    }
+    
+    /* Info boxes */
+    .stAlert {
+        border-radius: 8px;
+        border-left: 4px solid #1E3A8A;
+    }
+    
+    /* Buttons and selectbox */
+    .stSelectbox, .stRadio {
+        background-color: white;
+        border-radius: 8px;
+    }
+    
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #F9FAFB;
+    }
+    
+    /* Cards effect for columns */
+    .element-container {
+        border-radius: 8px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Title with better styling
+st.markdown("""
+    <h1 style='text-align: center; margin-bottom: 0;'>🏈 NFL Matchup Analyzer</h1>
+    <p style='text-align: center; color: #6B7280; font-size: 1.2rem; margin-top: 0;'>
+        Data-driven insights for smarter lineup decisions
+    </p>
+""", unsafe_allow_html=True)
+
+st.markdown("---")
 
 # Sidebar controls
 st.sidebar.header("Settings")
@@ -79,7 +154,7 @@ def get_defense_stats(stats_df, position_codes):
 # TABS
 # ============================================================
 
-tab1, tab2, tab3, tab4 = st.tabs(["🛡️ Worst Defenses", "🔥 This Week's Matchups", "🏆 Top Scorers", "⚡ NextGen Stats"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🛡️ Worst Defenses", "🔥 This Week's Matchups", "🏆 Top Scorers", "📊 Consistency", "⚡ NextGen Stats"])
 
 # ============================================================
 # TAB 1: WORST DEFENSES
@@ -362,10 +437,167 @@ with tab3:
             st.info("No TE data available")
 
 # ============================================================
-# TAB 4: NEXTGEN STATS
+# TAB 4: CONSISTENCY RATINGS
 # ============================================================
 
 with tab4:
+    st.header("📊 Player Consistency Ratings")
+    st.markdown("Find reliable players who perform week after week")
+    
+    consistency_position = st.selectbox("Position", ["QB", "RB", "WR", "TE"], key="consistency_pos")
+    
+    # Filter for position
+    pos_df = stats_df[stats_df['position'].isin(positions[consistency_position])].copy()
+    
+    if pos_df.empty:
+        st.warning(f"No {consistency_position} data available")
+    else:
+        # Determine the primary stat to analyze
+        if consistency_position == "QB":
+            stat_col = 'passing_yards' if 'passing_yards' in pos_df.columns else 'fantasy_points_ppr'
+            stat_name = "Passing Yards"
+        elif consistency_position in ["RB", "WR", "TE"]:
+            stat_col = 'fantasy_points_ppr' if 'fantasy_points_ppr' in pos_df.columns else 'receiving_yards'
+            stat_name = "Fantasy Points"
+        else:
+            stat_col = pos_df.columns[0]
+            stat_name = "Points"
+        
+        if stat_col not in pos_df.columns:
+            st.warning(f"Required stat column not found")
+        else:
+            # Calculate consistency metrics per player
+            player_consistency = pos_df.groupby('player_display_name').agg({
+                stat_col: ['mean', 'std', 'count', 'min', 'max']
+            }).reset_index()
+            
+            player_consistency.columns = ['Player', 'Avg', 'StdDev', 'Games', 'Min', 'Max']
+            
+            # Calculate consistency score (lower std dev relative to mean = more consistent)
+            # Coefficient of Variation
+            player_consistency['CV'] = (player_consistency['StdDev'] / player_consistency['Avg']) * 100
+            
+            # Consistency Rating (inverted CV, scaled 0-100)
+            max_cv = player_consistency['CV'].max()
+            player_consistency['Consistency Rating'] = 100 - ((player_consistency['CV'] / max_cv) * 100)
+            
+            # Filter players with at least 3 games
+            player_consistency = player_consistency[player_consistency['Games'] >= 3]
+            
+            # Add floor and ceiling metrics
+            player_consistency['Floor'] = player_consistency['Min']
+            player_consistency['Ceiling'] = player_consistency['Max']
+            player_consistency['Range'] = player_consistency['Max'] - player_consistency['Min']
+            
+            # Metrics display
+            st.subheader("📈 Key Metrics")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                most_consistent = player_consistency.nlargest(1, 'Consistency Rating').iloc[0]
+                st.metric(
+                    "Most Consistent Player",
+                    most_consistent['Player'],
+                    f"{most_consistent['Consistency Rating']:.1f}/100"
+                )
+            
+            with col2:
+                highest_avg = player_consistency.nlargest(1, 'Avg').iloc[0]
+                st.metric(
+                    "Highest Average",
+                    highest_avg['Player'],
+                    f"{highest_avg['Avg']:.1f}"
+                )
+            
+            with col3:
+                highest_floor = player_consistency.nlargest(1, 'Floor').iloc[0]
+                st.metric(
+                    "Highest Floor",
+                    highest_floor['Player'],
+                    f"{highest_floor['Floor']:.1f}"
+                )
+            
+            with col4:
+                highest_ceiling = player_consistency.nlargest(1, 'Ceiling').iloc[0]
+                st.metric(
+                    "Highest Ceiling",
+                    highest_ceiling['Player'],
+                    f"{highest_ceiling['Ceiling']:.1f}"
+                )
+            
+            # Sorting options
+            st.subheader(f"🎯 {consistency_position} Consistency Rankings")
+            
+            sort_by_consistency = st.radio(
+                "Sort by:",
+                ["Most Consistent", "Highest Average", "Highest Floor", "Highest Ceiling"],
+                horizontal=True,
+                key="consistency_sort"
+            )
+            
+            if sort_by_consistency == "Most Consistent":
+                display_df = player_consistency.sort_values('Consistency Rating', ascending=False)
+            elif sort_by_consistency == "Highest Average":
+                display_df = player_consistency.sort_values('Avg', ascending=False)
+            elif sort_by_consistency == "Highest Floor":
+                display_df = player_consistency.sort_values('Floor', ascending=False)
+            else:  # Highest Ceiling
+                display_df = player_consistency.sort_values('Ceiling', ascending=False)
+            
+            # Display table
+            st.dataframe(
+                display_df[['Player', 'Avg', 'Consistency Rating', 'Floor', 'Ceiling', 'Games']].head(20).style.format({
+                    'Avg': '{:.1f}',
+                    'Consistency Rating': '{:.1f}',
+                    'Floor': '{:.1f}',
+                    'Ceiling': '{:.1f}',
+                    'Games': '{:.0f}'
+                }).background_gradient(subset=['Consistency Rating'], cmap='RdYlGn'),
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Explanation
+            with st.expander("ℹ️ How Consistency is Calculated"):
+                st.markdown("""
+                **Consistency Rating (0-100):**
+                - Higher score = more reliable week-to-week performance
+                - Based on Coefficient of Variation (Standard Deviation / Mean)
+                - Players with low variance relative to their average score higher
+                
+                **Floor:** Lowest performance in a game this season
+                
+                **Ceiling:** Best performance in a game this season
+                
+                **Range:** Difference between ceiling and floor (lower = more consistent)
+                
+                **Why it matters:** Consistent players reduce risk in your lineup, while high-ceiling players offer upside potential.
+                """)
+            
+            # Weekly performance chart for top player
+            st.subheader("📉 Week-by-Week Performance")
+            
+            top_players = display_df.head(10)['Player'].tolist()
+            selected_player = st.selectbox("Select player to view weekly performance:", top_players)
+            
+            player_weeks = pos_df[pos_df['player_display_name'] == selected_player].copy()
+            if 'week' in player_weeks.columns and not player_weeks.empty:
+                player_weeks = player_weeks.sort_values('week')
+                
+                # Create chart data
+                chart_data = player_weeks.set_index('week')[stat_col]
+                
+                st.line_chart(chart_data)
+                
+                # Show stats
+                avg_val = chart_data.mean()
+                st.caption(f"Average: {avg_val:.1f} | Min: {chart_data.min():.1f} | Max: {chart_data.max():.1f}")
+
+# ============================================================
+# TAB 5: NEXTGEN STATS
+# ============================================================
+
+with tab5:
     st.header("⚡ NextGen Stats")
     st.markdown("Advanced metrics from NFL's player tracking system")
     
