@@ -8,9 +8,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# Custom CSS for light theme + pop
 st.markdown("""
 <style>
+    /* ---------- GLOBAL STYLES ---------- */
+    .stApp {
+        background-color: #F9FAFB; /* Light gray background */
+        color: #111827;
+    }
+
     .main h1 {
         font-size: 4rem !important;
         font-weight: 900 !important;
@@ -23,63 +29,94 @@ st.markdown("""
     
     .subtitle {
         text-align: center;
-        color: #6B7280;
+        color: #4B5563;
         font-size: 1.5rem;
         margin-bottom: 3rem;
     }
-    
+
+    /* ---------- CARD STYLES ---------- */
     .sport-card {
         background: white;
-        border-radius: 16px;
-        padding: 2rem;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border-radius: 20px;
+        padding: 2.5rem;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+        transition: transform 0.3s ease, box-shadow 0.3s ease, border 0.3s ease;
         cursor: pointer;
-        border: 2px solid transparent;
+        border: 2px solid #E5E7EB;
     }
     
     .sport-card:hover {
-        transform: translateY(-8px);
-        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
-        border-color: #1E3A8A;
+        transform: translateY(-10px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        border-color: #2563EB; /* Vivid blue accent */
     }
-    
+
     .sport-icon {
         font-size: 5rem;
         text-align: center;
         margin-bottom: 1rem;
     }
-    
+
     .sport-title {
         font-size: 2rem;
-        font-weight: 700;
+        font-weight: 800;
         text-align: center;
+        color: #111827;
         margin-bottom: 1rem;
     }
-    
+
     .sport-description {
-        color: #6B7280;
+        color: #4B5563;
         text-align: center;
         font-size: 1.1rem;
     }
-    
+
     .feature-list {
         margin-top: 1.5rem;
         padding-left: 0;
         list-style: none;
     }
-    
+
     .feature-item {
         padding: 0.5rem 0;
-        color: #374151;
-        font-size: 1rem;
+        color: #1F2937;
+        font-size: 1.05rem;
     }
-    
+
     .feature-item:before {
         content: "✓ ";
-        color: #10B981;
+        color: #10B981; /* Bright green checkmark */
         font-weight: bold;
         margin-right: 0.5rem;
+    }
+
+    /* ---------- SIDEBAR ---------- */
+    section[data-testid="stSidebar"] {
+        background-color: #111827; /* Dark navy sidebar */
+        color: white;
+    }
+
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3, 
+    section[data-testid="stSidebar"] p {
+        color: white !important;
+    }
+
+    /* Sidebar selectbox */
+    div[data-baseweb="select"] > div {
+        background-color: #1F2937 !important;
+        border-radius: 8px;
+        border: 1px solid #374151 !important;
+        color: white !important;
+    }
+
+    /* Sidebar footer */
+    .sidebar-footer {
+        text-align: center;
+        color: #9CA3AF;
+        font-size: 0.8rem;
+        margin-top: 2rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -143,21 +180,19 @@ if sport == "Home":
     st.markdown("""
     <div style='text-align: center; padding: 2rem;'>
         <h2>🚀 Getting Started</h2>
-        <p style='font-size: 1.2rem; color: #6B7280;'>
+        <p style='font-size: 1.2rem; color: #4B5563;'>
             Select a sport from the dropdown above to begin your analysis
         </p>
     </div>
     """, unsafe_allow_html=True)
 
 elif sport == "🏈 NFL":
-    # NFL App - Import from nfl_app.py module
     try:
         import nfl_app
     except ImportError:
         st.error("NFL app module not found. Make sure nfl_app.py exists in your repository.")
         
 elif sport == "🏀 NBA":
-    # NBA App - Import from nba_app.py module
     try:
         import nba_app
     except ImportError:
@@ -166,7 +201,7 @@ elif sport == "🏀 NBA":
 # Footer
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
-<div style='text-align: center; color: #6B7280; font-size: 0.8rem;'>
+<div class='sidebar-footer'>
     📊 Data updated daily<br>
     Built with Streamlit
 </div>
