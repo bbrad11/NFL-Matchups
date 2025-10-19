@@ -350,6 +350,73 @@ with tab4:
     else:
         st.warning(f"No {pos} data available for DFS Insights")
 
+# === Begin of DFS Insights Tab Code ===
+
+tab4 = st.tabs(["📈 DFS Insights"])[0]
+
+with tab4:
+    st.header("DFS Insights: Player Reliability & Upside")
+    st.markdown("Identify consistent players for safer bets and high-upside players for tournaments.")
+
+    # Select position
+    pos = st.selectbox("Position", ["QB", "RB", "WR", "TE"], key="dfs_pos")
+    df = stats_df[stats_df['position'].isin(positions[pos])].copy()
+
+    if not df.empty:
+        # Calculate weekly performance stats
+        grouped = df.groupby('player_display_name')['fantasy_points_ppr'].agg(['mean', 'std']).reset_index()
+        grouped.rename(columns={'mean': 'Avg Pts', 'std': 'Std Dev'}, inplace=True)
+        grouped['Consistency Rating'] = grouped['Std Dev'] / grouped['Avg Pts']
+
+        # Compute 20th/80th percentiles for ceiling/floor
+        quantiles = df.groupby('player_display_name')['fantasy_points_ppr'].quantile([0.2, 0.8]).unstack().reset_index()
+        quantiles.columns = ['Player', 'Floor', 'Ceiling']
+
+        # Merge and sort
+        dfs_df = grouped.merge(quantiles, left_on='player_display_name', right_on='Player', how='left')
+        dfs_df['Range'] = dfs_df['Ceiling'] - dfs_df['Floor']
+        dfs_df = dfs_df.sort_values('Consistency Rating')
+
+        # Color coding function
+        def color_points(val):
+            if pd.isna(val):
+                return ''
+            if val > 20:
+                return 'background-color: #d4edda'  # light green
+            elif val < 10:
+                return 'background-color: #f8d7da'  # light red
+            else:
+                return 'background-color: #fff3cd'  # light yellow
+
+        # Apply color styling
+        styled_df = dfs_df.style.applymap(
+            color_points,
+            subset=['Avg Pts', 'FanDuel Projection', 'Ceiling', 'Floor']
+        )
+
+        # Display styled data frame
+        st.dataframe(styled_df, use_container_width=True)
+
+        # Download button for the data
+        csv_bytes = dfs_df.to_csv(index=False).encode()
+        st.download_button(
+            label="💾 Download DFS Insights CSV",
+            data=csv_bytes,
+            file_name="dfs_insights_fantasy_points.csv",
+            mime="text/csv"
+        )
+
+        # Optional: Add a bar chart for projections vs actuals
+        if 'FanDuel Projection' in dfs_df.columns:
+            st.subheader("Projection vs Actual")
+            chart_data = dfs_df[['Player', 'Avg Pts', 'FanDuel Projection']].set_index('Player')
+            st.bar_chart(chart_data)
+    else:
+        st.warning(f"No data available for {pos}")
+
+# === End of DFS Insights Tab Code ===
+
+
 
 # Footer
 st.markdown("---")
