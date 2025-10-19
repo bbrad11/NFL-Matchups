@@ -1,4 +1,6 @@
-nflreadpy
 streamlit
 pandas
-polars
+nflreadpy
+altair
+matplotlib
+seaborn
