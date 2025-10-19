@@ -4,3 +4,4 @@ nflreadpy
 altair
 matplotlib
 seaborn
+requests
