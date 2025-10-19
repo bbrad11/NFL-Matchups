@@ -11,7 +11,7 @@ st.markdown("Track strength-vs-weakness matchups and defensive positional weakne
 
 # Sidebar controls
 st.sidebar.header("Settings")
-season = st.sidebar.selectbox("Season", [2024, 2023, 2022], index=0)
+season = st.sidebar.selectbox("Season", [2025, 2024, 2023], index=0)
 current_week = st.sidebar.slider("Current Week", 1, 18, 7)
 
 # Cache data loading
@@ -213,45 +213,121 @@ with tab3:
     def get_td_leaders(df, position_list, position_name):
         pos_df = df[df['position'].isin(position_list)].copy()
         
+        # Check which columns exist
+        has_passing = 'passing_tds' in pos_df.columns
+        has_rushing = 'rushing_tds' in pos_df.columns
+        has_receiving = 'receiving_tds' in pos_df.columns
+        
+        # Build aggregation dict based on available columns
+        agg_dict = {}
+        
+        if has_rushing:
+            agg_dict['rushing_tds'] = 'sum'
+            pos_df['rushing_tds'] = pos_df['rushing_tds'].fillna(0)
+        
+        if has_receiving:
+            agg_dict['receiving_tds'] = 'sum'
+            pos_df['receiving_tds'] = pos_df['receiving_tds'].fillna(0)
+        
+        if has_passing:
+            agg_dict['passing_tds'] = 'sum'
+            pos_df['passing_tds'] = pos_df['passing_tds'].fillna(0)
+        
+        # Add team column (try different possible names)
+        team_col = None
+        for col in ['recent_team', 'team', 'team_abbr']:
+            if col in pos_df.columns:
+                team_col = col
+                agg_dict[col] = 'last'
+                break
+        
+        if not agg_dict:
+            st.error(f"No TD columns found for {position_name}")
+            return pd.DataFrame()
+        
+        # Calculate total TDs
         if position_name == "QB":
-            pos_df['total_tds'] = pos_df['passing_tds'].fillna(0) + pos_df['rushing_tds'].fillna(0)
+            if has_passing and has_rushing:
+                pos_df['total_tds'] = pos_df['passing_tds'] + pos_df['rushing_tds']
+            elif has_passing:
+                pos_df['total_tds'] = pos_df['passing_tds']
+            else:
+                pos_df['total_tds'] = 0
+            sort_col = 'passing_tds' if has_passing else 'total_tds'
         else:
-            pos_df['total_tds'] = pos_df['rushing_tds'].fillna(0) + pos_df['receiving_tds'].fillna(0)
+            tds = []
+            if has_rushing:
+                tds.append(pos_df['rushing_tds'])
+            if has_receiving:
+                tds.append(pos_df['receiving_tds'])
+            pos_df['total_tds'] = sum(tds) if tds else 0
+            sort_col = 'total_tds'
         
-        leaders = pos_df.groupby('player_display_name').agg({
-            'rushing_tds': 'sum',
-            'receiving_tds': 'sum',
-            'passing_tds': 'sum',
-            'total_tds': 'sum',
-            'recent_team': 'last',
-        }).reset_index()
+        agg_dict['total_tds'] = 'sum'
         
-        if position_name == "QB":
-            leaders = leaders.sort_values('passing_tds', ascending=False).head(15)
-        else:
-            leaders = leaders.sort_values('total_tds', ascending=False).head(15)
-        
-        return leaders
+        try:
+            leaders = pos_df.groupby('player_display_name').agg(agg_dict).reset_index()
+            leaders = leaders.sort_values(sort_col, ascending=False).head(15)
+            return leaders
+        except Exception as e:
+            st.error(f"Error processing {position_name}: {str(e)}")
+            return pd.DataFrame()
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.subheader("🎯 QB Leaders")
         qb_tds = get_td_leaders(stats_df, positions['QB'], "QB")
-        st.dataframe(qb_tds[['player_display_name', 'recent_team', 'passing_tds', 'rushing_tds']], use_container_width=True)
+        if not qb_tds.empty:
+            display_cols = ['player_display_name']
+            for col in ['recent_team', 'team', 'team_abbr']:
+                if col in qb_tds.columns:
+                    display_cols.append(col)
+                    break
+            for col in ['passing_tds', 'rushing_tds']:
+                if col in qb_tds.columns:
+                    display_cols.append(col)
+            st.dataframe(qb_tds[display_cols], use_container_width=True)
         
         st.subheader("🏃 RB Leaders")
         rb_tds = get_td_leaders(stats_df, positions['RB'], "RB")
-        st.dataframe(rb_tds[['player_display_name', 'recent_team', 'rushing_tds', 'receiving_tds', 'total_tds']], use_container_width=True)
+        if not rb_tds.empty:
+            display_cols = ['player_display_name']
+            for col in ['recent_team', 'team', 'team_abbr']:
+                if col in rb_tds.columns:
+                    display_cols.append(col)
+                    break
+            for col in ['rushing_tds', 'receiving_tds', 'total_tds']:
+                if col in rb_tds.columns:
+                    display_cols.append(col)
+            st.dataframe(rb_tds[display_cols], use_container_width=True)
     
     with col2:
         st.subheader("📡 WR Leaders")
         wr_tds = get_td_leaders(stats_df, positions['WR'], "WR")
-        st.dataframe(wr_tds[['player_display_name', 'recent_team', 'receiving_tds', 'total_tds']], use_container_width=True)
+        if not wr_tds.empty:
+            display_cols = ['player_display_name']
+            for col in ['recent_team', 'team', 'team_abbr']:
+                if col in wr_tds.columns:
+                    display_cols.append(col)
+                    break
+            for col in ['receiving_tds', 'total_tds']:
+                if col in wr_tds.columns:
+                    display_cols.append(col)
+            st.dataframe(wr_tds[display_cols], use_container_width=True)
         
         st.subheader("🎣 TE Leaders")
         te_tds = get_td_leaders(stats_df, positions['TE'], "TE")
-        st.dataframe(te_tds[['player_display_name', 'recent_team', 'receiving_tds', 'total_tds']], use_container_width=True)
+        if not te_tds.empty:
+            display_cols = ['player_display_name']
+            for col in ['recent_team', 'team', 'team_abbr']:
+                if col in te_tds.columns:
+                    display_cols.append(col)
+                    break
+            for col in ['receiving_tds', 'total_tds']:
+                if col in te_tds.columns:
+                    display_cols.append(col)
+            st.dataframe(te_tds[display_cols], use_container_width=True)
 
 # Footer
 st.markdown("---")
