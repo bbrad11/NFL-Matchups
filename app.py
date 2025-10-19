@@ -294,6 +294,63 @@ with tab3:
         else:
             st.info("No TE data available")
 
+# ============================================================
+# TAB 4: DFS INSIGHTS
+# ============================================================
+
+tab4 = st.tabs(["📈 DFS Insights"])[0]
+
+with tab4:
+    st.header("DFS Insights: Player Reliability & Upside")
+    st.markdown("Identify consistent players for safer bets — and volatile players for tournament upside.")
+
+    # Filter
+    pos = st.selectbox("Position", ["QB", "RB", "WR", "TE"], key="dfs_pos")
+
+    df = stats_df[stats_df['position'].isin(positions[pos])].copy()
+    
+    if not df.empty:
+        # Group player weekly performance
+        grouped = df.groupby('player_display_name')['fantasy_points_ppr'].agg(['mean', 'std']).reset_index()
+        grouped.rename(columns={'mean': 'Avg Pts', 'std': 'Std Dev'}, inplace=True)
+        grouped['Consistency Rating'] = grouped['Std Dev'] / grouped['Avg Pts']
+        
+        # Floor / ceiling from quantiles
+        quantiles = df.groupby('player_display_name')['fantasy_points_ppr'].quantile([0.2, 0.8]).unstack().reset_index()
+        quantiles.columns = ['Player', 'Floor', 'Ceiling']
+
+        dfs_df = grouped.merge(quantiles, left_on='player_display_name', right_on='Player', how='left')
+        dfs_df['Range'] = dfs_df['Ceiling'] - dfs_df['Floor']
+        dfs_df = dfs_df.sort_values('Consistency Rating')
+
+        st.subheader("Top 10 Safest Plays (Lowest Variance)")
+        st.dataframe(dfs_df.head(10)[['Player', 'Avg Pts', 'Std Dev', 'Consistency Rating']], use_container_width=True)
+
+        st.subheader("Top 10 Boom/Bust Plays (Highest Range)")
+        st.dataframe(
+            dfs_df.sort_values('Range', ascending=False).head(10)[['Player', 'Avg Pts', 'Floor', 'Ceiling', 'Range']],
+            use_container_width=True
+        )
+
+        # Merge with defense stats for matchup edge
+        defense_stats = get_defense_stats(stats_df, positions[pos])
+        if not defense_stats.empty:
+            df_comb = df.merge(defense_stats, left_on='opponent_team', right_on='Defense', how='left')
+            avg_matchup = df_comb.groupby('player_display_name')['Fantasy Points Ppr'].mean().reset_index()
+            dfs_df = dfs_df.merge(avg_matchup, left_on='Player', right_on='player_display_name', how='left')
+
+        # Export option
+        st.download_button(
+            label="💾 Download DFS Insights CSV",
+            data=dfs_df.to_csv(index=False).encode('utf-8'),
+            file_name="dfs_insights.csv",
+            mime="text/csv"
+        )
+
+    else:
+        st.warning(f"No {pos} data available for DFS Insights")
+
+
 # Footer
 st.markdown("---")
 st.markdown("📊 Data: [nflverse](https://github.com/nflverse/nflreadpy) | Updated weekly during NFL season")
