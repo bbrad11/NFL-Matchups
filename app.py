@@ -36,6 +36,18 @@ with st.spinner('Loading NFL data...'):
 
 st.success(f"✅ Loaded {len(stats_df):,} player games")
 
+# Debug info in sidebar
+with st.sidebar.expander("🔍 Debug Info"):
+    st.write(f"**Data Shape:** {stats_df.shape}")
+    st.write(f"**Columns:** {stats_df.columns.tolist()}")
+    if 'week' in stats_df.columns:
+        st.write(f"**Available Weeks:** {sorted(stats_df['week'].unique())}")
+        st.write(f"**Records in Week {current_week}:** {len(stats_df[stats_df['week'] == current_week])}")
+    else:
+        st.warning("No 'week' column found in data!")
+    st.write(f"**Sample Data:**")
+    st.dataframe(stats_df.head(3))
+
 # Position groups
 positions = {
     'QB': ['QB'],
@@ -80,19 +92,31 @@ with tab1:
     # Add filter option
     time_filter = st.radio(
         "Show stats for:",
-        ["Season Total", "This Week Only", "Last 3 Weeks"],
-        horizontal=True
+        ["Season Total", f"Week {current_week} Only", "Last 3 Weeks"],
+        horizontal=True,
+        key="def_time_filter"
     )
     
     position = st.selectbox("Position", ["QB", "RB", "WR", "TE"])
     
     # Filter data based on selection
-    if time_filter == "This Week Only":
-        filtered_df = stats_df[stats_df['week'] == current_week]
+    if time_filter == f"Week {current_week} Only":
+        if 'week' in stats_df.columns:
+            filtered_df = stats_df[stats_df['week'] == current_week]
+            st.info(f"Showing {len(filtered_df)} records from Week {current_week}")
+        else:
+            filtered_df = stats_df
+            st.warning("Week filtering not available - showing all data")
     elif time_filter == "Last 3 Weeks":
-        filtered_df = stats_df[stats_df['week'] >= current_week - 2]
+        if 'week' in stats_df.columns:
+            filtered_df = stats_df[stats_df['week'] >= current_week - 2]
+            st.info(f"Showing {len(filtered_df)} records from Weeks {current_week-2} to {current_week}")
+        else:
+            filtered_df = stats_df
+            st.warning("Week filtering not available - showing all data")
     else:  # Season Total
         filtered_df = stats_df
+        st.info(f"Showing all {len(filtered_df)} records from season")
     
     defense_stats = get_defense_stats(filtered_df, positions[position])
     
