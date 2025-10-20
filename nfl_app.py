@@ -1,6 +1,7 @@
 import streamlit as st
 import nflreadpy as nfl
 import pandas as pd
+import polars as pl
 from datetime import datetime
 
 # Import betting analyzer if it exists, otherwise create a placeholder
@@ -67,12 +68,23 @@ def run():
     def load_nfl_data(season):
         player_stats = nfl.load_player_stats([season])
         schedule = nfl.load_schedules([season])
+        
+        # Convert Polars DataFrames to Pandas if needed
+        if hasattr(player_stats, 'to_pandas'):
+            player_stats = player_stats.to_pandas()
+        if hasattr(schedule, 'to_pandas'):
+            schedule = schedule.to_pandas()
+            
         return player_stats, schedule
 
     @st.cache_data
     def load_nextgen_data(season, stat_type):
         try:
-            return nfl.load_nextgen_stats([season], stat_type=stat_type)
+            nextgen_df = nfl.load_nextgen_stats([season], stat_type=stat_type)
+            # Convert Polars DataFrame to Pandas if needed
+            if hasattr(nextgen_df, 'to_pandas'):
+                nextgen_df = nextgen_df.to_pandas()
+            return nextgen_df
         except Exception as e:
             return pd.DataFrame()
 
@@ -87,7 +99,8 @@ def run():
         st.write(f"**Data Shape:** {stats_df.shape}")
         if 'week' in stats_df.columns:
             st.write(f"**Available Weeks:** {sorted(stats_df['week'].unique())}")
-            st.write(f"**Records in Week {current_week}:** {len(stats_df[stats_df['week'] == current_week])}")
+            week_data = stats_df[stats_df['week'] == current_week]
+            st.write(f"**Records in Week {current_week}:** {len(week_data)}")
     
     # Position groups
     positions = {
