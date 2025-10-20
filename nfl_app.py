@@ -107,14 +107,16 @@ def run():
         
         return defense_stats
     
-    # Tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🛡️ Worst Defenses", 
-        "🔥 This Week's Matchups", 
-        "🏆 Top Scorers",
-        "📊 Consistency",
-        "⚡ NextGen Stats"
-    ])
+  from betting_analyzer import render_betting_tab
+
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "🛡️ Worst Defenses", 
+    "🔥 This Week's Matchups", 
+    "🏆 Top Scorers",
+    "📊 Consistency",
+    "⚡ NextGen Stats",
+    "💰 Betting"
+])
     
     # TAB 1: WORST DEFENSES
     with tab1:
@@ -443,3 +445,7 @@ def run():
 
 if __name__ == "__main__":
     run()
+
+# TAB 6: BETTING
+with tab6:
+    render_betting_tab(sport="NFL", stats_df=stats_df, schedule_df=schedule_df)
