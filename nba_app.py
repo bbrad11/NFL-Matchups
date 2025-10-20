@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date
+from betting_analyzer import render_betting_tab, BettingAnalyzer
 
 def run():
     """Main NBA app function"""
@@ -43,6 +44,20 @@ def run():
         .stTabs [aria-selected="true"] {
             background-color: #C9082A;
             color: white;
+        }
+        
+        .best-bet-card {
+            background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            color: white;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+        }
+        
+        .best-bet-card h3 {
+            color: white;
+            margin: 0 0 0.5rem 0;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -129,16 +144,119 @@ def run():
     else:
         st.warning("⚠️ No player data available yet. Season may not have started.")
     
-    # Tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
+    # Tabs - INCLUDING BEST BETS
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "🏆 Best Bets",
         "🛡️ Worst Defenses", 
         "🏀 Tonight's Games", 
         "🏆 Top Performers",
-        "📊 Consistency"
+        "📊 Consistency",
+        "💰 Betting Tools"
     ])
     
-    # TAB 1: WORST DEFENSES
+    # TAB 1: BEST BETS DASHBOARD
     with tab1:
+        st.header("🏆 Today's Best NBA Bets")
+        st.markdown("Top value plays based on matchup analysis and player consistency")
+        
+        analyzer = BettingAnalyzer(sport="NBA")
+        
+        if todays_games.empty or player_logs.empty:
+            st.info("Best bets will be available once the season starts and games are scheduled!")
+            st.markdown("**NBA Season 2024-25 starts October 22, 2024** 🏀")
+        else:
+            # Analyze today's games for betting opportunities
+            best_bets = []
+            
+            for _, game in todays_games.iterrows():
+                away_team = game.get('VISITOR_TEAM_ABBREVIATION', game.get('AWAY_TEAM_ABBREVIATION', 'TBD'))
+                home_team = game.get('HOME_TEAM_ABBREVIATION', 'TBD')
+                
+                # Find top scorers from each team
+                for team, opponent in [(away_team, home_team), (home_team, away_team)]:
+                    team_players = player_logs[player_logs['TEAM_ABBREVIATION'] == team]
+                    
+                    if not team_players.empty:
+                        # Get top 3 scorers
+                        top_scorers = team_players.groupby('PLAYER_NAME').agg({
+                            'PTS': ['mean', 'std', 'count']
+                        }).reset_index()
+                        
+                        top_scorers.columns = ['Player', 'PPG', 'StdDev', 'Games']
+                        top_scorers = top_scorers[top_scorers['Games'] >= 5]
+                        
+                        if not top_scorers.empty:
+                            # Calculate consistency
+                            top_scorers['Consistency'] = 100 - ((top_scorers['StdDev'] / top_scorers['PPG']) * 100)
+                            top_scorers = top_scorers.sort_values('PPG', ascending=False).head(3)
+                            
+                            for _, player in top_scorers.iterrows():
+                                confidence = 'High' if player['Consistency'] > 75 else 'Medium' if player['Consistency'] > 60 else 'Low'
+                                
+                                if confidence in ['High', 'Medium']:
+                                    best_bets.append({
+                                        'player': player['Player'],
+                                        'team': team,
+                                        'opponent': opponent,
+                                        'ppg': player['PPG'],
+                                        'consistency': player['Consistency'],
+                                        'confidence': confidence,
+                                        'prop_suggestion': f"Over {player['PPG'] - 2:.1f} Points",
+                                        'games': int(player['Games'])
+                                    })
+            
+            # Display best bets
+            if best_bets:
+                best_bets_df = pd.DataFrame(best_bets)
+                best_bets_df = best_bets_df.sort_values(['confidence', 'consistency'], ascending=[True, False])
+                
+                st.subheader(f"🔥 Top {min(10, len(best_bets))} Player Props for Today")
+                
+                for idx, bet in best_bets_df.head(10).iterrows():
+                    confidence_emoji = "🟢" if bet['confidence'] == 'High' else "🟡"
+                    
+                    st.markdown(f"""
+                    <div class="best-bet-card">
+                        <h3>{confidence_emoji} {bet['player']} - {bet['team']}</h3>
+                        <p><strong>Matchup:</strong> vs {bet['opponent']}</p>
+                        <p><strong>Season Average:</strong> {bet['ppg']:.1f} PPG | <strong>Consistency:</strong> {bet['consistency']:.1f}/100</p>
+                        <p><strong>Suggested Bet:</strong> {bet['prop_suggestion']}</p>
+                        <p><strong>Confidence:</strong> {bet['confidence']} (Based on {bet['games']} games)</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Add betting tips
+                with st.expander("💡 How to Use These Bets"):
+                    st.markdown("""
+                    **High Confidence** 🟢
+                    - Player is very consistent (low variance)
+                    - Safe prop bet for points over
+                    - Good for parlays
+                    
+                    **Medium Confidence** 🟡
+                    - Player shows some variance
+                    - Still a good bet but use smaller stakes
+                    - Check recent form before betting
+                    
+                    **Tips:**
+                    - Compare suggested line to actual sportsbook lines
+                    - Look for 2-3 point differences for value
+                    - Check injury reports before betting
+                    - Consider home/away splits
+                    """)
+                
+                # Export
+                st.download_button(
+                    label="📥 Download Today's Best Bets CSV",
+                    data=best_bets_df.to_csv(index=False),
+                    file_name=f"nba_best_bets_{date.today()}.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.info("No high-confidence bets found for today's games. Check back closer to tip-off!")
+    
+    # TAB 2: WORST DEFENSES
+    with tab2:
         st.header("Which Teams Give Up The Most?")
         st.markdown("Find defensive weaknesses to exploit")
         
@@ -150,9 +268,9 @@ def run():
                 ["PTS", "FG3M", "REB", "AST", "STL", "BLK"]
             )
             
-            # Calculate points allowed (opponent stats)
+            # Calculate team stats
             defense_stats = team_logs.groupby('TEAM_ABBREVIATION').agg({
-                'PTS': 'mean',  # Points scored
+                'PTS': 'mean',
                 'FG3M': 'mean',
                 'REB': 'mean',
                 'AST': 'mean',
@@ -166,22 +284,26 @@ def run():
             col1, col2 = st.columns(2)
             
             with col1:
-                st.subheader("🔴 Worst Defenses")
-                st.caption("Teams allowing most production")
+                st.subheader("🔴 Highest Scoring Teams")
+                st.caption("Teams that score the most")
                 
-                # For defense, we'd need opponent stats - showing offensive stats for now
                 worst = defense_stats.nlargest(10, 'PPG')
                 st.dataframe(worst[['Team', 'PPG', 'Games']], use_container_width=True, hide_index=True)
             
             with col2:
-                st.subheader("🟢 Best Defenses")
-                st.caption("Teams with lowest scoring")
+                st.subheader("🟢 Lowest Scoring Teams")
+                st.caption("Teams with strongest defense")
                 
                 best = defense_stats.nsmallest(10, 'PPG')
                 st.dataframe(best[['Team', 'PPG', 'Games']], use_container_width=True, hide_index=True)
+            
+            # Chart
+            st.subheader("📊 League-Wide Scoring")
+            chart_data = defense_stats.sort_values('PPG', ascending=False).set_index('Team')['PPG']
+            st.bar_chart(chart_data)
     
-    # TAB 2: TONIGHT'S GAMES
-    with tab2:
+    # TAB 3: TONIGHT'S GAMES
+    with tab3:
         st.header("🏀 Tonight's NBA Games")
         st.markdown("Find favorable matchups for your lineup")
         
@@ -203,15 +325,29 @@ def run():
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        st.markdown(f"**{away_team} Analysis**")
-                        st.info("Matchup analysis coming soon")
+                        st.markdown(f"**{away_team} Key Players**")
+                        
+                        away_players = player_logs[player_logs['TEAM_ABBREVIATION'] == away_team]
+                        if not away_players.empty:
+                            top_3 = away_players.groupby('PLAYER_NAME')['PTS'].mean().nlargest(3)
+                            for player, ppg in top_3.items():
+                                st.success(f"⭐ {player}: {ppg:.1f} PPG")
+                        else:
+                            st.info("Player data loading...")
                     
                     with col2:
-                        st.markdown(f"**{home_team} Analysis**")
-                        st.info("Matchup analysis coming soon")
+                        st.markdown(f"**{home_team} Key Players**")
+                        
+                        home_players = player_logs[player_logs['TEAM_ABBREVIATION'] == home_team]
+                        if not home_players.empty:
+                            top_3 = home_players.groupby('PLAYER_NAME')['PTS'].mean().nlargest(3)
+                            for player, ppg in top_3.items():
+                                st.success(f"⭐ {player}: {ppg:.1f} PPG")
+                        else:
+                            st.info("Player data loading...")
     
-    # TAB 3: TOP PERFORMERS
-    with tab3:
+    # TAB 4: TOP PERFORMERS
+    with tab4:
         st.header("Season Leaders")
         
         if player_logs.empty:
@@ -264,8 +400,8 @@ def run():
             chart_data = top_players.head(15).set_index('Player')[sort_col]
             st.bar_chart(chart_data)
     
-    # TAB 4: CONSISTENCY
-    with tab4:
+    # TAB 5: CONSISTENCY
+    with tab5:
         st.header("📊 Player Consistency Ratings")
         st.markdown("Find reliable players who perform night after night")
         
@@ -370,6 +506,10 @@ def run():
                     
                     **Why it matters:** Consistent players are safer DFS plays, while high-ceiling players offer tournament upside.
                     """)
+    
+    # TAB 6: BETTING TOOLS
+    with tab6:
+        render_betting_tab(sport="NBA", stats_df=player_logs, schedule_df=todays_games)
     
     # Footer
     st.markdown("---")
