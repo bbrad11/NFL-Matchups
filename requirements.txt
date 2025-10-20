@@ -3,3 +3,4 @@ streamlit
 pandas
 polars
 nba_api
+numpy
