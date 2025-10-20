@@ -7,7 +7,7 @@ from datetime import datetime
 def run():
     """Main NFL app function"""
 
-    # Custom CSS for modern look
+    # Custom CSS
     st.markdown("""
     <style>
         .main h1 {
@@ -70,30 +70,11 @@ def run():
             
         return player_stats, schedule
 
-    @st.cache_data
-    def load_nextgen_data(season, stat_type):
-        try:
-            nextgen_df = nfl.load_nextgen_stats([season], stat_type=stat_type)
-            # Convert Polars DataFrame to Pandas if needed
-            if hasattr(nextgen_df, 'to_pandas'):
-                nextgen_df = nextgen_df.to_pandas()
-            return nextgen_df
-        except Exception as e:
-            return pd.DataFrame()
-
     # Load data
     with st.spinner('Loading NFL data...'):
         stats_df, schedule_df = load_nfl_data(season)
 
     st.success(f"✅ Loaded {len(stats_df):,} player games")
-    
-    # Debug info
-    with st.sidebar.expander("🔍 Debug Info"):
-        st.write(f"**Data Shape:** {stats_df.shape}")
-        if 'week' in stats_df.columns:
-            st.write(f"**Available Weeks:** {sorted(stats_df['week'].unique())}")
-            week_data = stats_df[stats_df['week'] == current_week]
-            st.write(f"**Records in Week {current_week}:** {len(week_data)}")
     
     # Position groups
     positions = {
@@ -177,7 +158,7 @@ def run():
         "🏆 Top Scorers",
         "📊 Consistency",
         "⚡ NextGen Stats",
-        "💰 Betting"
+        "💰 Player Props"
     ])
 
     # TAB 1: WORST DEFENSES
@@ -387,6 +368,16 @@ def run():
         
         stat_type = st.selectbox("Stat Category", ["rushing", "receiving", "passing"])
         
+        @st.cache_data
+        def load_nextgen_data(season, stat_type):
+            try:
+                nextgen_df = nfl.load_nextgen_stats([season], stat_type=stat_type)
+                if hasattr(nextgen_df, 'to_pandas'):
+                    nextgen_df = nextgen_df.to_pandas()
+                return nextgen_df
+            except Exception as e:
+                return pd.DataFrame()
+        
         with st.spinner(f'Loading NextGen {stat_type} stats...'):
             nextgen_df = load_nextgen_data(season, stat_type)
         
@@ -421,34 +412,155 @@ def run():
                 st.write(nextgen_df.columns.tolist())
                 st.dataframe(nextgen_df.head(20), use_container_width=True)
     
-    # TAB 6: BETTING (Fixed)
+    # TAB 6: PLAYER PROPS
     with tab6:
-        st.header("💰 Betting Insights")
-        st.markdown("Analyze matchups and trends for prop predictions.")
+        st.header("💰 Player Props & Parlay Builder")
+        st.markdown("Analyze player stats to build winning parlays")
         
-        st.info("**Betting Analysis Tips:**")
-        st.write("🎯 **QB Props:** Target QBs vs weak pass defenses (high passing yards allowed)")
-        st.write("🏃 **RB Props:** Look for RBs against teams allowing high rushing yards")
-        st.write("📡 **WR Props:** Consider WRs in high-scoring games and dome environments")
-        st.write("🌤️ **Weather:** Check conditions for outdoor games (wind affects passing)")
-        
-        # Show some basic betting insights based on the data
-        st.subheader("📊 This Week's Betting Opportunities")
-        
+        # Get current week's games
         if not schedule_df.empty and 'week' in schedule_df.columns:
             week_games = schedule_df[schedule_df['week'] == current_week]
+            
             if not week_games.empty:
-                st.write(f"**{len(week_games)} games this week**")
+                st.subheader(f"🎯 Week {current_week} Player Props")
                 
-                # Show games with potential high scoring
-                for _, game in week_games.head(5).iterrows():
-                    away = game.get('away_team', 'TBD')
-                    home = game.get('home_team', 'TBD')
-                    st.write(f"• {away} @ {home}")
+                # Analyze each game for prop opportunities
+                for _, game in week_games.iterrows():
+                    away_team = game.get('away_team', 'TBD')
+                    home_team = game.get('home_team', 'TBD')
+                    
+                    with st.expander(f"🏈 {away_team} @ {home_team}"):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown(f"**{away_team} Props:**")
+                            
+                            # Get away team's offensive players
+                            away_players = stats_df[stats_df['recent_team'] == away_team].copy()
+                            if not away_players.empty:
+                                # QB Props
+                                qb_players = away_players[away_players['position'] == 'QB']
+                                if not qb_players.empty:
+                                    qb_stats = qb_players.groupby('player_display_name').agg({
+                                        'passing_yards': 'mean',
+                                        'passing_tds': 'mean'
+                                    }).round(1)
+                                    qb_stats = qb_stats.sort_values('passing_yards', ascending=False).head(2)
+                                    
+                                    st.write("**QB Props:**")
+                                    for player, stats in qb_stats.iterrows():
+                                        st.write(f"• {player}: {stats['passing_yards']:.0f} pass yds avg")
+                                
+                                # RB Props
+                                rb_players = away_players[away_players['position'].isin(['RB', 'FB'])]
+                                if not rb_players.empty:
+                                    rb_stats = rb_players.groupby('player_display_name').agg({
+                                        'rushing_yards': 'mean',
+                                        'receiving_yards': 'mean'
+                                    }).round(1)
+                                    rb_stats = rb_stats.sort_values('rushing_yards', ascending=False).head(2)
+                                    
+                                    st.write("**RB Props:**")
+                                    for player, stats in rb_stats.iterrows():
+                                        st.write(f"• {player}: {stats['rushing_yards']:.0f} rush yds avg")
+                                
+                                # WR Props
+                                wr_players = away_players[away_players['position'] == 'WR']
+                                if not wr_players.empty:
+                                    wr_stats = wr_players.groupby('player_display_name').agg({
+                                        'receiving_yards': 'mean',
+                                        'receptions': 'mean'
+                                    }).round(1)
+                                    wr_stats = wr_stats.sort_values('receiving_yards', ascending=False).head(2)
+                                    
+                                    st.write("**WR Props:**")
+                                    for player, stats in wr_stats.iterrows():
+                                        st.write(f"• {player}: {stats['receiving_yards']:.0f} rec yds avg")
+                        
+                        with col2:
+                            st.markdown(f"**{home_team} Props:**")
+                            
+                            # Get home team's offensive players
+                            home_players = stats_df[stats_df['recent_team'] == home_team].copy()
+                            if not home_players.empty:
+                                # QB Props
+                                qb_players = home_players[home_players['position'] == 'QB']
+                                if not qb_players.empty:
+                                    qb_stats = qb_players.groupby('player_display_name').agg({
+                                        'passing_yards': 'mean',
+                                        'passing_tds': 'mean'
+                                    }).round(1)
+                                    qb_stats = qb_stats.sort_values('passing_yards', ascending=False).head(2)
+                                    
+                                    st.write("**QB Props:**")
+                                    for player, stats in qb_stats.iterrows():
+                                        st.write(f"• {player}: {stats['passing_yards']:.0f} pass yds avg")
+                                
+                                # RB Props
+                                rb_players = home_players[home_players['position'].isin(['RB', 'FB'])]
+                                if not rb_players.empty:
+                                    rb_stats = rb_players.groupby('player_display_name').agg({
+                                        'rushing_yards': 'mean',
+                                        'receiving_yards': 'mean'
+                                    }).round(1)
+                                    rb_stats = rb_stats.sort_values('rushing_yards', ascending=False).head(2)
+                                    
+                                    st.write("**RB Props:**")
+                                    for player, stats in rb_stats.iterrows():
+                                        st.write(f"• {player}: {stats['rushing_yards']:.0f} rush yds avg")
+                                
+                                # WR Props
+                                wr_players = home_players[home_players['position'] == 'WR']
+                                if not wr_players.empty:
+                                    wr_stats = wr_players.groupby('player_display_name').agg({
+                                        'receiving_yards': 'mean',
+                                        'receptions': 'mean'
+                                    }).round(1)
+                                    wr_stats = wr_stats.sort_values('receiving_yards', ascending=False).head(2)
+                                    
+                                    st.write("**WR Props:**")
+                                    for player, stats in wr_stats.iterrows():
+                                        st.write(f"• {player}: {stats['receiving_yards']:.0f} rec yds avg")
             else:
-                st.write("No games scheduled for this week")
+                st.warning(f"No games found for Week {current_week}")
         else:
-            st.write("Schedule data not available")
+            st.warning("Schedule data not available")
+        
+        # Parlay Tips
+        st.subheader("🎲 Parlay Building Tips")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**High-Probability Props:**")
+            st.write("✅ QB passing yards")
+            st.write("✅ RB rushing yards")
+            st.write("✅ WR receptions")
+            st.write("✅ Kicker field goals")
+        
+        with col2:
+            st.write("**Avoid These Props:**")
+            st.write("❌ Defensive TDs")
+            st.write("❌ Special teams TDs")
+            st.write("❌ Exact yardage props")
+            st.write("❌ Weather-dependent props")
+        
+        # Show defense rankings for prop targeting
+        st.subheader("🎯 Target These Defenses")
+        
+        defense_tips = st.selectbox("Select position to see worst defenses:", ["QB", "RB", "WR", "TE"])
+        
+        if defense_tips in positions:
+            defense_stats = get_defense_stats(stats_df, positions[defense_tips])
+            if not defense_stats.empty:
+                td_cols = [col for col in defense_stats.columns if 'Td' in col]
+                if td_cols:
+                    defense_stats = defense_stats.sort_values(td_cols[0], ascending=False)
+                    st.write(f"**Worst {defense_tips} Defenses (Target for Props):**")
+                    worst_defenses = defense_stats.head(5)['Defense'].tolist()
+                    for i, team in enumerate(worst_defenses, 1):
+                        st.write(f"{i}. {team}")
+                    st.caption("Target offensive players against these teams!")
 
     st.markdown("---")
     st.caption("Data from nflverse (via nflreadpy). Created with Streamlit.")
