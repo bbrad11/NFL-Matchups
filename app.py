@@ -180,4 +180,44 @@ if sport == "Home":
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # NBA Car
+        # NBA Card
+        st.markdown("""
+        <div class="sport-card">
+            <div class="sport-icon">🏀</div>
+            <div class="sport-title">NBA Matchup Analyzer</div>
+            <div class="sport-description">
+                Analyze NBA matchups and find scoring opportunities.
+            </div>
+            <ul class="feature-list">
+                <li class="feature-item">Team defensive rankings</li>
+                <li class="feature-item">Tonight's game analysis</li>
+                <li class="feature-item">Player performance trends</li>
+                <li class="feature-item">Pace and efficiency stats</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; padding: 2rem;'>
+        <h2>🚀 Getting Started</h2>
+        <p style='font-size: 1.2rem; color: #4B5563;'>
+            Select a sport from the dropdown above to begin your analysis.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+elif sport == "🏈 NFL":
+    st.switch_page("pages/1_🏈_NFL.py")
+
+elif sport == "🏀 NBA":
+    st.switch_page("pages/2_🏀_NBA.py")
+
+# ---------- FOOTER ----------
+st.sidebar.markdown("---")
+st.sidebar.markdown("""
+<div class='sidebar-footer'>
+    📊 Data updated daily<br>
+    Built with Streamlit
+</div>
+""", unsafe_allow_html=True)
