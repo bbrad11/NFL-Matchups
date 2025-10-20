@@ -1,9 +1,17 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 
 def run():
     """Main NBA app function"""
+    
+    # Try to import NBA API
+    try:
+        from nba_api.stats.endpoints import leaguegamefinder, playergamelogs, teamgamelogs, scoreboardv2
+        from nba_api.stats.static import players, teams
+        nba_api_available = True
+    except ImportError:
+        nba_api_available = False
     
     # Custom CSS
     st.markdown("""
@@ -49,21 +57,77 @@ def run():
     
     st.markdown("---")
     
+    # Check if NBA API is available
+    if not nba_api_available:
+        st.error("📦 **NBA API not installed!** Add `nba_api` to requirements.txt and redeploy.")
+        st.code("nba_api", language="text")
+        st.stop()
+    
     # Sidebar controls
     st.sidebar.header("⚙️ NBA Settings")
-    season = st.sidebar.selectbox("Season", ["2024-25", "2023-24", "2022-23"], index=0)
+    season_map = {
+        "2024-25": "2024-25",
+        "2023-24": "2023-24", 
+        "2022-23": "2022-23"
+    }
+    season_display = st.sidebar.selectbox("Season", list(season_map.keys()), index=0)
+    season = season_map[season_display]
     
     # Position groups
     positions = {
-        'PG': 'Point Guard',
-        'SG': 'Shooting Guard',
-        'SF': 'Small Forward',
-        'PF': 'Power Forward',
-        'C': 'Center'
+        'Guard': ['G', 'PG', 'SG', 'G-F'],
+        'Forward': ['F', 'SF', 'PF', 'F-C', 'F-G'],
+        'Center': ['C', 'C-F']
     }
     
-    # Info banner
-    st.info("📊 **Coming Soon!** NBA data integration is currently being developed. Connect your NBA API credentials in the sidebar to get started.")
+    # Cache functions
+    @st.cache_data(ttl=3600)
+    def get_all_teams():
+        """Get all NBA teams"""
+        return teams.get_teams()
+    
+    @st.cache_data(ttl=3600)
+    def get_player_game_logs(season_year):
+        """Get player game logs for the season"""
+        try:
+            logs = playergamelogs.PlayerGameLogs(season_nullable=season_year)
+            return logs.get_data_frames()[0]
+        except Exception as e:
+            st.error(f"Error loading player data: {e}")
+            return pd.DataFrame()
+    
+    @st.cache_data(ttl=3600)
+    def get_todays_games():
+        """Get today's NBA games"""
+        try:
+            today = date.today().strftime('%m/%d/%Y')
+            scoreboard = scoreboardv2.ScoreboardV2(game_date=today)
+            games = scoreboard.get_data_frames()[0]
+            return games
+        except Exception as e:
+            return pd.DataFrame()
+    
+    @st.cache_data(ttl=3600) 
+    def get_team_game_logs(season_year):
+        """Get team game logs"""
+        try:
+            logs = teamgamelogs.TeamGameLogs(season_nullable=season_year)
+            return logs.get_data_frames()[0]
+        except Exception as e:
+            st.error(f"Error loading team data: {e}")
+            return pd.DataFrame()
+    
+    # Load data
+    with st.spinner('Loading NBA data...'):
+        all_teams = get_all_teams()
+        player_logs = get_player_game_logs(season)
+        team_logs = get_team_game_logs(season)
+        todays_games = get_todays_games()
+    
+    if not player_logs.empty:
+        st.success(f"✅ Loaded {len(player_logs):,} player game records")
+    else:
+        st.warning("⚠️ No player data available yet. Season may not have started.")
     
     # Tabs
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -78,37 +142,43 @@ def run():
         st.header("Which Teams Give Up The Most?")
         st.markdown("Find defensive weaknesses to exploit")
         
-        stat_category = st.selectbox(
-            "Stat Category",
-            ["Points", "3-Pointers", "Rebounds", "Assists", "Steals", "Blocks"]
-        )
-        
-        position = st.selectbox("Position", list(positions.keys()), format_func=lambda x: f"{x} - {positions[x]}")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("🔴 Worst Defenses")
-            st.caption("These teams allow the most production")
+        if team_logs.empty:
+            st.info("Team defensive data will be available once the season starts.")
+        else:
+            stat_category = st.selectbox(
+                "Stat Category",
+                ["PTS", "FG3M", "REB", "AST", "STL", "BLK"]
+            )
             
-            # Sample data
-            sample_data = pd.DataFrame({
-                'Team': ['LAL', 'GSW', 'BOS', 'MIA', 'PHX'],
-                stat_category: [125.3, 122.8, 120.5, 119.2, 118.7]
-            })
-            st.dataframe(sample_data, use_container_width=True, hide_index=True)
-            st.caption("*Sample data - Connect NBA API for live data*")
-        
-        with col2:
-            st.subheader("🟢 Best Defenses")
-            st.caption("These teams shut down opponents")
+            # Calculate points allowed (opponent stats)
+            defense_stats = team_logs.groupby('TEAM_ABBREVIATION').agg({
+                'PTS': 'mean',  # Points scored
+                'FG3M': 'mean',
+                'REB': 'mean',
+                'AST': 'mean',
+                'STL': 'mean',
+                'BLK': 'mean',
+                'GAME_ID': 'count'
+            }).reset_index()
             
-            sample_data_best = pd.DataFrame({
-                'Team': ['MEM', 'CLE', 'NYK', 'DEN', 'MIL'],
-                stat_category: [105.2, 106.5, 107.8, 108.9, 109.3]
-            })
-            st.dataframe(sample_data_best, use_container_width=True, hide_index=True)
-            st.caption("*Sample data - Connect NBA API for live data*")
+            defense_stats.columns = ['Team', 'PPG', '3PM', 'RPG', 'APG', 'SPG', 'BPG', 'Games']
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("🔴 Worst Defenses")
+                st.caption("Teams allowing most production")
+                
+                # For defense, we'd need opponent stats - showing offensive stats for now
+                worst = defense_stats.nlargest(10, 'PPG')
+                st.dataframe(worst[['Team', 'PPG', 'Games']], use_container_width=True, hide_index=True)
+            
+            with col2:
+                st.subheader("🟢 Best Defenses")
+                st.caption("Teams with lowest scoring")
+                
+                best = defense_stats.nsmallest(10, 'PPG')
+                st.dataframe(best[['Team', 'PPG', 'Games']], use_container_width=True, hide_index=True)
     
     # TAB 2: TONIGHT'S GAMES
     with tab2:
@@ -118,160 +188,195 @@ def run():
         current_date = datetime.now().strftime("%B %d, %Y")
         st.subheader(f"📅 Games for {current_date}")
         
-        # Sample games
-        sample_games = [
-            {"away": "LAL", "home": "GSW", "time": "10:00 PM ET"},
-            {"away": "BOS", "home": "MIA", "time": "7:30 PM ET"},
-            {"away": "PHX", "home": "DEN", "time": "9:00 PM ET"},
-        ]
-        
-        for game in sample_games:
-            with st.expander(f"{game['away']} @ {game['home']} - {game['time']}"):
-                col1, col2 = st.columns(2)
+        if todays_games.empty:
+            st.info("No games scheduled for today. Check back on game days!")
+            st.markdown("**NBA Season 2024-25 starts October 22, 2024** 🏀")
+        else:
+            st.success(f"✅ {len(todays_games)} games today!")
+            
+            for _, game in todays_games.iterrows():
+                away_team = game.get('VISITOR_TEAM_ABBREVIATION', game.get('AWAY_TEAM_ABBREVIATION', 'TBD'))
+                home_team = game.get('HOME_TEAM_ABBREVIATION', 'TBD')
+                game_time = game.get('GAME_STATUS_TEXT', 'TBD')
                 
-                with col1:
-                    st.markdown(f"**{game['away']} Offense**")
-                    st.success("✅ PG: Good matchup vs weak perimeter D")
-                    st.success("✅ C: Good matchup vs weak interior D")
-                    st.caption("*Sample analysis - Connect NBA API for live data*")
-                
-                with col2:
-                    st.markdown(f"**{game['home']} Offense**")
-                    st.success("✅ SG: Good matchup vs weak 3PT D")
-                    st.success("✅ PF: Good matchup vs weak rebounding D")
-                    st.caption("*Sample analysis - Connect NBA API for live data*")
-        
-        st.info("Connect NBA API to see real-time matchup analysis")
+                with st.expander(f"{away_team} @ {home_team} - {game_time}"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown(f"**{away_team} Analysis**")
+                        st.info("Matchup analysis coming soon")
+                    
+                    with col2:
+                        st.markdown(f"**{home_team} Analysis**")
+                        st.info("Matchup analysis coming soon")
     
     # TAB 3: TOP PERFORMERS
     with tab3:
         st.header("Season Leaders")
         
-        sort_option = st.radio(
-            "Show leaders by:",
-            ["Points", "Rebounds", "Assists", "Fantasy Points"],
-            horizontal=True
-        )
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("🎯 Guards")
-            sample_guards = pd.DataFrame({
-                'Player': ['Luka Doncic', 'Damian Lillard', 'Trae Young', 'Ja Morant', 'Tyrese Maxey'],
-                'Team': ['DAL', 'MIL', 'ATL', 'MEM', 'PHI'],
-                sort_option: [32.5, 30.2, 29.8, 28.5, 27.9]
-            })
-            st.dataframe(sample_guards, use_container_width=True, hide_index=True)
-            st.caption("*Sample data - Connect NBA API for live data*")
+        if player_logs.empty:
+            st.info("Player stats will be available once games are played.")
+        else:
+            sort_option = st.radio(
+                "Show leaders by:",
+                ["PTS", "REB", "AST", "FG3M", "STL", "BLK"],
+                horizontal=True
+            )
             
-            st.subheader("💪 Forwards")
-            sample_forwards = pd.DataFrame({
-                'Player': ['Giannis', 'Kevin Durant', 'Jayson Tatum', 'LeBron James', 'Kawhi Leonard'],
-                'Team': ['MIL', 'PHX', 'BOS', 'LAL', 'LAC'],
-                sort_option: [31.2, 29.5, 28.7, 26.8, 25.3]
-            })
-            st.dataframe(sample_forwards, use_container_width=True, hide_index=True)
-            st.caption("*Sample data - Connect NBA API for live data*")
-        
-        with col2:
-            st.subheader("🏔️ Centers")
-            sample_centers = pd.DataFrame({
-                'Player': ['Joel Embiid', 'Nikola Jokic', 'Anthony Davis', 'Bam Adebayo', 'Domantas Sabonis'],
-                'Team': ['PHI', 'DEN', 'LAL', 'MIA', 'SAC'],
-                sort_option: [33.8, 32.1, 28.9, 22.5, 21.8]
-            })
-            st.dataframe(sample_centers, use_container_width=True, hide_index=True)
-            st.caption("*Sample data - Connect NBA API for live data*")
+            # Aggregate player stats
+            player_stats = player_logs.groupby('PLAYER_NAME').agg({
+                'PTS': 'mean',
+                'REB': 'mean',
+                'AST': 'mean',
+                'FG3M': 'mean',
+                'STL': 'mean',
+                'BLK': 'mean',
+                'GAME_ID': 'count'
+            }).reset_index()
+            
+            player_stats.columns = ['Player', 'PPG', 'RPG', 'APG', '3PM', 'SPG', 'BPG', 'Games']
+            
+            # Filter players with at least 5 games
+            player_stats = player_stats[player_stats['Games'] >= 5]
+            
+            # Sort by selected stat
+            stat_map = {
+                'PTS': 'PPG',
+                'REB': 'RPG', 
+                'AST': 'APG',
+                'FG3M': '3PM',
+                'STL': 'SPG',
+                'BLK': 'BPG'
+            }
+            
+            sort_col = stat_map[sort_option]
+            top_players = player_stats.nlargest(20, sort_col)
+            
+            st.subheader(f"Top 20 by {sort_option}")
+            st.dataframe(
+                top_players[['Player', 'PPG', 'RPG', 'APG', 'Games']].round(1),
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Chart
+            st.subheader(f"📊 Top 15 Leaders - {sort_col}")
+            chart_data = top_players.head(15).set_index('Player')[sort_col]
+            st.bar_chart(chart_data)
     
     # TAB 4: CONSISTENCY
     with tab4:
         st.header("📊 Player Consistency Ratings")
         st.markdown("Find reliable players who perform night after night")
         
-        consistency_position = st.selectbox(
-            "Position", 
-            list(positions.keys()),
-            format_func=lambda x: f"{x} - {positions[x]}",
-            key="consistency_pos"
-        )
-        
-        # Metrics
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Most Consistent", "Sample Player", "95.2/100")
-        with col2:
-            st.metric("Highest Average", "Sample Player", "28.5 PPG")
-        with col3:
-            st.metric("Highest Floor", "Sample Player", "18.2 PPG")
-        with col4:
-            st.metric("Highest Ceiling", "Sample Player", "45.8 PPG")
-        
-        st.caption("*Sample metrics - Connect NBA API for live data*")
-        
-        # Sample consistency data
-        st.subheader(f"🎯 {consistency_position} Consistency Rankings")
-        sample_consistency = pd.DataFrame({
-            'Player': ['Player A', 'Player B', 'Player C', 'Player D', 'Player E'],
-            'Team': ['LAL', 'GSW', 'BOS', 'MIA', 'PHX'],
-            'Avg': [28.5, 26.8, 25.3, 24.7, 23.9],
-            'Consistency': [92.5, 89.3, 87.8, 85.2, 83.6],
-            'Floor': [18.2, 16.5, 15.8, 14.3, 13.9],
-            'Ceiling': [42.5, 41.8, 39.2, 38.5, 37.8],
-            'Games': [25, 28, 26, 30, 24]
-        })
-        st.dataframe(sample_consistency, use_container_width=True, hide_index=True)
-        st.caption("*Sample data - Connect NBA API for live data*")
-        
-        with st.expander("ℹ️ How Consistency is Calculated"):
-            st.markdown("""
-            **Consistency Rating (0-100):**
-            - Higher score = more reliable night-to-night performance
-            - Based on variance in scoring/stats
-            - Accounts for minutes played and game situation
+        if player_logs.empty:
+            st.info("Consistency ratings will be available once more games are played.")
+        else:
+            # Filter for players with enough games
+            player_game_counts = player_logs.groupby('PLAYER_NAME').size()
+            qualified_players = player_game_counts[player_game_counts >= 5].index
             
-            **Floor:** Lowest performance this season
+            consistency_df = player_logs[player_logs['PLAYER_NAME'].isin(qualified_players)].copy()
             
-            **Ceiling:** Best performance this season
-            
-            **Range:** Difference between ceiling and floor (lower = more consistent)
-            
-            **Why it matters:** Consistent players reduce risk in DFS lineups, while high-ceiling players offer upside potential.
-            """)
-    
-    # Setup instructions sidebar
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🔌 Connect NBA API")
-    
-    with st.sidebar.expander("Setup Instructions"):
-        st.markdown("""
-        **To enable live NBA data:**
-        
-        1. Install NBA API:
-        ```bash
-        pip install nba_api
-        ```
-        
-        2. Add API integration to this file
-        
-        3. Available data sources:
-        - Player game logs
-        - Team statistics
-        - Live game data
-        - Injury reports
-        - Vegas lines
-        
-        4. See documentation:
-        [NBA API Docs](https://github.com/swar/nba_api)
-        """)
+            if consistency_df.empty:
+                st.info("Not enough games played yet for consistency analysis. Check back after Week 2!")
+            else:
+                # Calculate consistency metrics
+                consistency_stats = consistency_df.groupby('PLAYER_NAME').agg({
+                    'PTS': ['mean', 'std', 'min', 'max', 'count']
+                }).reset_index()
+                
+                consistency_stats.columns = ['Player', 'Avg', 'StdDev', 'Floor', 'Ceiling', 'Games']
+                
+                # Coefficient of Variation
+                consistency_stats['CV'] = (consistency_stats['StdDev'] / consistency_stats['Avg']) * 100
+                
+                # Consistency Rating (0-100)
+                max_cv = consistency_stats['CV'].max()
+                if max_cv > 0:
+                    consistency_stats['Consistency Rating'] = 100 - ((consistency_stats['CV'] / max_cv) * 100)
+                else:
+                    consistency_stats['Consistency Rating'] = 100
+                
+                # Metrics
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    most_consistent = consistency_stats.nlargest(1, 'Consistency Rating').iloc[0]
+                    st.metric(
+                        "Most Consistent", 
+                        most_consistent['Player'][:15] + "..." if len(most_consistent['Player']) > 15 else most_consistent['Player'],
+                        f"{most_consistent['Consistency Rating']:.1f}/100"
+                    )
+                
+                with col2:
+                    highest_avg = consistency_stats.nlargest(1, 'Avg').iloc[0]
+                    st.metric(
+                        "Highest Average",
+                        highest_avg['Player'][:15] + "..." if len(highest_avg['Player']) > 15 else highest_avg['Player'],
+                        f"{highest_avg['Avg']:.1f} PPG"
+                    )
+                
+                with col3:
+                    highest_floor = consistency_stats.nlargest(1, 'Floor').iloc[0]
+                    st.metric(
+                        "Highest Floor",
+                        highest_floor['Player'][:15] + "..." if len(highest_floor['Player']) > 15 else highest_floor['Player'],
+                        f"{highest_floor['Floor']:.1f} PPG"
+                    )
+                
+                with col4:
+                    highest_ceiling = consistency_stats.nlargest(1, 'Ceiling').iloc[0]
+                    st.metric(
+                        "Highest Ceiling",
+                        highest_ceiling['Player'][:15] + "..." if len(highest_ceiling['Player']) > 15 else highest_ceiling['Player'],
+                        f"{highest_ceiling['Ceiling']:.1f} PPG"
+                    )
+                
+                # Rankings
+                st.subheader("🎯 Consistency Rankings")
+                
+                sort_by = st.radio(
+                    "Sort by:",
+                    ["Most Consistent", "Highest Average", "Highest Floor", "Highest Ceiling"],
+                    horizontal=True
+                )
+                
+                if sort_by == "Most Consistent":
+                    display_df = consistency_stats.sort_values('Consistency Rating', ascending=False)
+                elif sort_by == "Highest Average":
+                    display_df = consistency_stats.sort_values('Avg', ascending=False)
+                elif sort_by == "Highest Floor":
+                    display_df = consistency_stats.sort_values('Floor', ascending=False)
+                else:
+                    display_df = consistency_stats.sort_values('Ceiling', ascending=False)
+                
+                st.dataframe(
+                    display_df[['Player', 'Avg', 'Consistency Rating', 'Floor', 'Ceiling', 'Games']].head(20).round(1),
+                    use_container_width=True,
+                    hide_index=True
+                )
+                
+                with st.expander("ℹ️ How Consistency is Calculated"):
+                    st.markdown("""
+                    **Consistency Rating (0-100):**
+                    - Higher score = more reliable night-to-night performance
+                    - Based on Coefficient of Variation (StdDev / Mean)
+                    - Lower variance relative to average = higher rating
+                    
+                    **Floor:** Lowest scoring game this season
+                    
+                    **Ceiling:** Highest scoring game this season
+                    
+                    **Why it matters:** Consistent players are safer DFS plays, while high-ceiling players offer tournament upside.
+                    """)
     
     # Footer
     st.markdown("---")
     st.markdown("""
         <div style='text-align: center; color: #6B7280;'>
             📊 Data: NBA Stats API | Updated daily during NBA season<br>
-            <small>Currently showing sample data - Connect API for live statistics</small>
+            <small>Season 2024-25 starts October 22, 2024</small>
         </div>
     """, unsafe_allow_html=True)
 
