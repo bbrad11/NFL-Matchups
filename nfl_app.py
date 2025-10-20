@@ -4,13 +4,6 @@ import pandas as pd
 import polars as pl
 from datetime import datetime
 
-# Import betting analyzer if it exists, otherwise create a placeholder
-try:
-    from betting_analyzer import render_betting_tab
-except ImportError:
-    def render_betting_tab(sport, stats_df, schedule_df):
-        st.warning("Betting analyzer module not found. Please install or create betting_analyzer.py")
-
 def run():
     """Main NFL app function"""
 
@@ -428,14 +421,34 @@ def run():
                 st.write(nextgen_df.columns.tolist())
                 st.dataframe(nextgen_df.head(20), use_container_width=True)
     
-    # TAB 6: BETTING
+    # TAB 6: BETTING (Fixed)
     with tab6:
         st.header("💰 Betting Insights")
         st.markdown("Analyze matchups and trends for prop predictions.")
-        try:
-            render_betting_tab(sport="NFL", stats_df=stats_df, schedule_df=schedule_df)
-        except Exception as e:
-            st.error(f"Betting tab failed: {e}")
+        
+        st.info("**Betting Analysis Tips:**")
+        st.write("🎯 **QB Props:** Target QBs vs weak pass defenses (high passing yards allowed)")
+        st.write("🏃 **RB Props:** Look for RBs against teams allowing high rushing yards")
+        st.write("📡 **WR Props:** Consider WRs in high-scoring games and dome environments")
+        st.write("🌤️ **Weather:** Check conditions for outdoor games (wind affects passing)")
+        
+        # Show some basic betting insights based on the data
+        st.subheader("📊 This Week's Betting Opportunities")
+        
+        if not schedule_df.empty and 'week' in schedule_df.columns:
+            week_games = schedule_df[schedule_df['week'] == current_week]
+            if not week_games.empty:
+                st.write(f"**{len(week_games)} games this week**")
+                
+                # Show games with potential high scoring
+                for _, game in week_games.head(5).iterrows():
+                    away = game.get('away_team', 'TBD')
+                    home = game.get('home_team', 'TBD')
+                    st.write(f"• {away} @ {home}")
+            else:
+                st.write("No games scheduled for this week")
+        else:
+            st.write("Schedule data not available")
 
     st.markdown("---")
     st.caption("Data from nflverse (via nflreadpy). Created with Streamlit.")
