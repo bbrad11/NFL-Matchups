@@ -389,11 +389,122 @@ def run():
                                 rank = weak_teams.index(away) + 1
                                 st.success(f"✅ {pos}: Good matchup (vs #{rank} worst defense)")
     
-    # TAB 4: TOP SCORERS (keeping your original code - truncated for space)
+    # TAB 4: TOP SCORERS
     with tab4:
         st.header("Season Leaders")
-        # ... (keep your existing top scorers code)
-        st.info("Top scorers code here (same as before)")
+        
+        time_filter_leaders = st.radio(
+            "Show leaders for:",
+            ["Season Total", f"Week {current_week} Only", "Last 3 Weeks"],
+            horizontal=True,
+            key="leaders_time_filter"
+        )
+        
+        sort_option = st.radio(
+            "Show leaders by:",
+            ["Touchdowns", "Yards", "Fantasy Points"],
+            horizontal=True,
+            key="leaders_sort"
+        )
+        
+        # Filter data
+        if time_filter_leaders == f"Week {current_week} Only":
+            if 'week' in stats_df.columns:
+                filtered_leaders_df = stats_df[stats_df['week'] == current_week]
+            else:
+                filtered_leaders_df = stats_df
+        elif time_filter_leaders == "Last 3 Weeks":
+            if 'week' in stats_df.columns:
+                filtered_leaders_df = stats_df[stats_df['week'] >= current_week - 2]
+            else:
+                filtered_leaders_df = stats_df
+        else:
+            filtered_leaders_df = stats_df
+        
+        def get_leaders(df, pos_codes):
+            pos_df = df[df['position'].isin(pos_codes)].copy()
+            
+            if pos_df.empty:
+                return pd.DataFrame()
+            
+            # Build aggregation
+            agg_dict = {}
+            
+            for team_col in ['recent_team', 'team', 'team_abbr']:
+                if team_col in pos_df.columns:
+                    agg_dict[team_col] = 'last'
+                    break
+            
+            for col in ['passing_tds', 'rushing_tds', 'receiving_tds', 'passing_yards', 'rushing_yards', 'receiving_yards', 'fantasy_points_ppr']:
+                if col in pos_df.columns:
+                    pos_df[col] = pos_df[col].fillna(0)
+                    agg_dict[col] = 'sum'
+            
+            if not agg_dict:
+                return pd.DataFrame()
+            
+            leaders = pos_df.groupby('player_display_name').agg(agg_dict).reset_index()
+            
+            # Calculate totals
+            td_cols = [c for c in ['passing_tds', 'rushing_tds', 'receiving_tds'] if c in leaders.columns]
+            yds_cols = [c for c in ['passing_yards', 'rushing_yards', 'receiving_yards'] if c in leaders.columns]
+            
+            if td_cols:
+                leaders['Total TDs'] = leaders[td_cols].sum(axis=1)
+            if yds_cols:
+                leaders['Total Yards'] = leaders[yds_cols].sum(axis=1)
+            
+            # Rename
+            rename_map = {
+                'recent_team': 'Team', 'team': 'Team', 'team_abbr': 'Team',
+                'passing_tds': 'Pass TDs', 'rushing_tds': 'Rush TDs', 'receiving_tds': 'Rec TDs',
+                'passing_yards': 'Pass Yds', 'rushing_yards': 'Rush Yds', 'receiving_yards': 'Rec Yds',
+                'fantasy_points_ppr': 'Fantasy Pts'
+            }
+            leaders = leaders.rename(columns=rename_map)
+            leaders = leaders.rename(columns={'player_display_name': 'Player'})
+            
+            # Sort
+            if sort_option == "Touchdowns":
+                sort_col = 'Total TDs' if 'Total TDs' in leaders.columns else leaders.columns[1]
+            elif sort_option == "Yards":
+                sort_col = 'Total Yards' if 'Total Yards' in leaders.columns else leaders.columns[1]
+            else:
+                sort_col = 'Fantasy Pts' if 'Fantasy Pts' in leaders.columns else leaders.columns[1]
+            
+            return leaders.sort_values(sort_col, ascending=False).head(15)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("🎯 Quarterbacks")
+            qb_leaders = get_leaders(filtered_leaders_df, positions['QB'])
+            if not qb_leaders.empty:
+                st.dataframe(qb_leaders, use_container_width=True, hide_index=True)
+            else:
+                st.info("No QB data available")
+            
+            st.subheader("🏃 Running Backs")
+            rb_leaders = get_leaders(filtered_leaders_df, positions['RB'])
+            if not rb_leaders.empty:
+                st.dataframe(rb_leaders, use_container_width=True, hide_index=True)
+            else:
+                st.info("No RB data available")
+        
+        with col2:
+            st.subheader("📡 Wide Receivers")
+            wr_leaders = get_leaders(filtered_leaders_df, positions['WR'])
+            if not wr_leaders.empty:
+                st.dataframe(wr_leaders, use_container_width=True, hide_index=True)
+            else:
+                st.info("No WR data available")
+            
+            st.subheader("🎣 Tight Ends")
+            te_leaders = get_leaders(filtered_leaders_df, positions['TE'])
+            if not te_leaders.empty:
+                st.dataframe(te_leaders, use_container_width=True, hide_index=True)
+            else:
+                st.info("No TE data available")
     
     # TAB 5: CONSISTENCY (keeping your original code - truncated for space)
     with tab5:
