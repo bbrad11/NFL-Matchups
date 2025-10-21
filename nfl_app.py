@@ -506,17 +506,120 @@ def run():
             else:
                 st.info("No TE data available")
     
-    # TAB 5: CONSISTENCY (keeping your original code - truncated for space)
+    # TAB 5: CONSISTENCY
     with tab5:
         st.header("📊 Player Consistency Ratings")
-        # ... (keep your existing consistency code)
-        st.info("Consistency code here (same as before)")
+        st.markdown("Find reliable players who perform week after week")
+        
+        consistency_position = st.selectbox("Position", ["QB", "RB", "WR", "TE"], key="consistency_pos")
+        
+        pos_df = stats_df[stats_df['position'].isin(positions[consistency_position])].copy()
+        
+        if pos_df.empty:
+            st.warning(f"No {consistency_position} data available")
+        else:
+            # Determine stat column
+            if consistency_position == "QB":
+                stat_col = 'passing_yards' if 'passing_yards' in pos_df.columns else 'fantasy_points_ppr'
+            else:
+                stat_col = 'fantasy_points_ppr' if 'fantasy_points_ppr' in pos_df.columns else 'receiving_yards'
+            
+            if stat_col in pos_df.columns:
+                player_consistency = pos_df.groupby('player_display_name').agg({
+                    stat_col: ['mean', 'std', 'count', 'min', 'max']
+                }).reset_index()
+                
+                player_consistency.columns = ['Player', 'Avg', 'StdDev', 'Games', 'Min', 'Max']
+                player_consistency['CV'] = (player_consistency['StdDev'] / player_consistency['Avg']) * 100
+                max_cv = player_consistency['CV'].max()
+                if max_cv > 0:
+                    player_consistency['Consistency Rating'] = 100 - ((player_consistency['CV'] / max_cv) * 100)
+                else:
+                    player_consistency['Consistency Rating'] = 100
+                player_consistency = player_consistency[player_consistency['Games'] >= 3]
+                
+                # Metrics
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    if not player_consistency.empty:
+                        most_consistent = player_consistency.nlargest(1, 'Consistency Rating').iloc[0]
+                        st.metric("Most Consistent", most_consistent['Player'][:20], f"{most_consistent['Consistency Rating']:.1f}/100")
+                
+                with col2:
+                    if not player_consistency.empty:
+                        highest_avg = player_consistency.nlargest(1, 'Avg').iloc[0]
+                        st.metric("Highest Average", highest_avg['Player'][:20], f"{highest_avg['Avg']:.1f}")
+                
+                with col3:
+                    if not player_consistency.empty:
+                        highest_floor = player_consistency.nlargest(1, 'Min').iloc[0]
+                        st.metric("Highest Floor", highest_floor['Player'][:20], f"{highest_floor['Min']:.1f}")
+                
+                with col4:
+                    if not player_consistency.empty:
+                        highest_ceiling = player_consistency.nlargest(1, 'Max').iloc[0]
+                        st.metric("Highest Ceiling", highest_ceiling['Player'][:20], f"{highest_ceiling['Max']:.1f}")
+                
+                st.subheader(f"🎯 {consistency_position} Consistency Rankings")
+                if not player_consistency.empty:
+                    display_df = player_consistency.sort_values('Consistency Rating', ascending=False)
+                    st.dataframe(display_df[['Player', 'Avg', 'Consistency Rating', 'Min', 'Max', 'Games']].head(20), use_container_width=True, hide_index=True)
+                
+                with st.expander("ℹ️ How Consistency is Calculated"):
+                    st.markdown("""
+                    **Consistency Rating (0-100):**
+                    - Higher score = more reliable week-to-week
+                    - Based on Coefficient of Variation
+                    - Lower variance = higher consistency
+                    
+                    **Floor:** Lowest game performance
+                    **Ceiling:** Best game performance
+                    **Range:** Difference between ceiling and floor
+                    """)
     
-    # TAB 6: NEXTGEN STATS (keeping your original code - truncated for space)
+    # TAB 6: NEXTGEN STATS
     with tab6:
         st.header("⚡ NextGen Stats")
-        # ... (keep your existing NextGen code)
-        st.info("NextGen stats code here (same as before)")
+        st.markdown("Advanced metrics from NFL's player tracking system")
+        
+        stat_type = st.selectbox("Stat Category", ["rushing", "receiving", "passing"])
+        
+        with st.spinner(f'Loading NextGen {stat_type} stats...'):
+            nextgen_df = load_nextgen_data(season, stat_type)
+        
+        if nextgen_df.empty:
+            st.warning(f"No NextGen {stat_type} data available for {season}")
+        else:
+            st.success(f"✅ Loaded {len(nextgen_df):,} NextGen records")
+            
+            available_cols = nextgen_df.columns.tolist()
+            
+            if stat_type == "rushing" and 'rush_yards' in available_cols:
+                st.subheader("Top Rushers")
+                top_df = nextgen_df.nlargest(15, 'rush_yards')
+                display_cols = ['player_display_name', 'team_abbr', 'rush_yards', 'rush_attempts']
+                display_cols = [c for c in display_cols if c in available_cols]
+                st.dataframe(top_df[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+            
+            elif stat_type == "receiving" and 'receiving_yards' in available_cols:
+                st.subheader("Top Receivers")
+                top_df = nextgen_df.nlargest(15, 'receiving_yards')
+                display_cols = ['player_display_name', 'team_abbr', 'receiving_yards', 'receptions']
+                display_cols = [c for c in display_cols if c in available_cols]
+                st.dataframe(top_df[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+            
+            elif stat_type == "passing" and 'pass_yards' in available_cols:
+                st.subheader("Top Passers")
+                top_df = nextgen_df.nlargest(15, 'pass_yards')
+                display_cols = ['player_display_name', 'team_abbr', 'pass_yards', 'completions', 'attempts']
+                display_cols = [c for c in display_cols if c in available_cols]
+                st.dataframe(top_df[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+            
+            with st.expander("📋 View All Available NextGen Metrics"):
+                st.write("**Available columns:**")
+                st.write(nextgen_df.columns.tolist())
+                st.dataframe(nextgen_df.head(20), use_container_width=True)
     
     # TAB 7: BETTING TOOLS
     with tab7:
