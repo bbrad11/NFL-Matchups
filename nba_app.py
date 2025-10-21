@@ -163,7 +163,7 @@ def run():
         
         if todays_games.empty or player_logs.empty:
             st.info("Best bets will be available once the season starts and games are scheduled!")
-            st.markdown("**NBA Season 2024-25 starts October 22, 2024** 🏀")
+            st.markdown("**NBA Season 2024-25 starts October 21, 2025** 🏀")
         else:
             # Analyze today's games for betting opportunities
             best_bets = []
