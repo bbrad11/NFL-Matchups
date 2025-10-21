@@ -163,7 +163,7 @@ def run():
         
         if todays_games.empty or player_logs.empty:
             st.info("Best bets will be available once the season starts and games are scheduled!")
-            st.markdown("**NBA Season 2024-25 starts October 21, 2025** 🏀")
+            st.markdown("**NBA Season 2024-25 starts October 22, 2024** 🏀")
         else:
             # Analyze today's games for betting opportunities
             best_bets = []
@@ -312,7 +312,7 @@ def run():
         
         if todays_games.empty:
             st.info("No games scheduled for today. Check back on game days!")
-            st.markdown("**NBA Season 2024-25 starts October 22, 2024** 🏀")
+            st.markdown("**NBA Season 2024-25 starts October 21, 2025** 🏀")
         else:
             st.success(f"✅ {len(todays_games)} games today!")
             
@@ -516,7 +516,7 @@ def run():
     st.markdown("""
         <div style='text-align: center; color: #6B7280;'>
             📊 Data: NBA Stats API | Updated daily during NBA season<br>
-            <small>Season 2024-25 starts October 22, 2024</small>
+            <small>Season 2024-25 starts October 21, 2025</small>
         </div>
     """, unsafe_allow_html=True)
 
