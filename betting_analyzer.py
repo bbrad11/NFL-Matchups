@@ -1,3 +1,8 @@
+"""
+Sports Betting Analyzer Module
+Integrates with your NFL/NBA apps to provide betting insights
+"""
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -291,12 +296,22 @@ def render_betting_tab(sport="NFL", stats_df=None, schedule_df=None):
         if stats_df is None or stats_df.empty:
             st.info("Load player data to analyze props")
         else:
-            # Player selection
-            if 'player_display_name' in stats_df.columns:
-                players = sorted(stats_df['player_display_name'].unique())
+            # Find the player name column
+            player_col = None
+            for col in ['player_display_name', 'player_name', 'PLAYER_NAME', 'Player']:
+                if col in stats_df.columns:
+                    player_col = col
+                    break
+            
+            if player_col is None:
+                st.warning("Player name column not found in data")
+                st.info("Available columns: " + ", ".join(stats_df.columns.tolist()))
+            else:
+                # Player selection
+                players = sorted(stats_df[player_col].unique())
                 selected_player = st.selectbox("Select Player", players)
                 
-                player_data = stats_df[stats_df['player_display_name'] == selected_player]
+                player_data = stats_df[stats_df[player_col] == selected_player]
                 
                 col1, col2 = st.columns(2)
                 
