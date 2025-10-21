@@ -305,56 +305,67 @@ def render_betting_tab(sport="NFL", stats_df=None, schedule_df=None):
             
             if player_col is None:
                 st.warning("Player name column not found in data")
-                st.info("Available columns: " + ", ".join(stats_df.columns.tolist()))
+                st.info("Available columns: " + ", ".join(stats_df.columns.tolist()[:10]))
             else:
-                # Player selection
-                players = sorted(stats_df[player_col].unique())
-                selected_player = st.selectbox("Select Player", players)
-                
-                player_data = stats_df[stats_df[player_col] == selected_player]
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown("### Prop Line")
+                # Player selection - with error handling
+                try:
+                    # Remove NaN values and get unique players
+                    player_list = stats_df[player_col].dropna().unique()
                     
-                    stat_type = st.selectbox(
-                        "Stat Type",
-                        ["passing_yards", "rushing_yards", "receiving_yards", "passing_tds", "receptions"] 
-                        if sport == "NFL" else ["PTS", "REB", "AST", "FG3M"]
-                    )
-                    
-                    prop_line = st.number_input("Line", value=25.5, step=0.5)
-                    over_odds = st.number_input("Over Odds", value=-110, step=10)
-                    under_odds = st.number_input("Under Odds", value=-110, step=10)
-                
-                with col2:
-                    st.markdown("### Analysis")
-                    
-                    if stat_type in player_data.columns:
-                        analysis = analyzer.prop_bet_analysis(
-                            player_data,
-                            prop_line,
-                            stat_type
-                        )
-                        
-                        if analysis:
-                            st.metric("Season Average", f"{analysis['season_average']:.1f}")
-                            st.metric("Recent Average (L5)", f"{analysis['recent_average']:.1f}")
-                            st.metric("Hit Rate (Over)", f"{analysis['over_probability']:.1f}%")
-                            
-                            st.markdown("---")
-                            
-                            if analysis['recommendation'] == 'OVER':
-                                st.success("✅ **LEAN: OVER**")
-                            elif analysis['recommendation'] == 'UNDER':
-                                st.warning("⚠️ **LEAN: UNDER**")
-                            else:
-                                st.info("🤷 **LEAN: PASS**")
-                            
-                            st.caption(f"Hit over {analysis['times_over']}/{analysis['games_analyzed']} times")
+                    if len(player_list) == 0:
+                        st.warning("No player data available")
                     else:
-                        st.warning("Stat type not available for this player")
+                        players = sorted([str(p) for p in player_list])
+                        selected_player = st.selectbox("Select Player", players)
+                        
+                        player_data = stats_df[stats_df[player_col] == selected_player]
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown("### Prop Line")
+                            
+                            stat_type = st.selectbox(
+                                "Stat Type",
+                                ["passing_yards", "rushing_yards", "receiving_yards", "passing_tds", "receptions"] 
+                                if sport == "NFL" else ["PTS", "REB", "AST", "FG3M"]
+                            )
+                            
+                            prop_line = st.number_input("Line", value=25.5, step=0.5)
+                            over_odds = st.number_input("Over Odds", value=-110, step=10)
+                            under_odds = st.number_input("Under Odds", value=-110, step=10)
+                        
+                        with col2:
+                            st.markdown("### Analysis")
+                            
+                            if stat_type in player_data.columns:
+                                analysis = analyzer.prop_bet_analysis(
+                                    player_data,
+                                    prop_line,
+                                    stat_type
+                                )
+                                
+                                if analysis:
+                                    st.metric("Season Average", f"{analysis['season_average']:.1f}")
+                                    st.metric("Recent Average (L5)", f"{analysis['recent_average']:.1f}")
+                                    st.metric("Hit Rate (Over)", f"{analysis['over_probability']:.1f}%")
+                                    
+                                    st.markdown("---")
+                                    
+                                    if analysis['recommendation'] == 'OVER':
+                                        st.success("✅ **LEAN: OVER**")
+                                    elif analysis['recommendation'] == 'UNDER':
+                                        st.warning("⚠️ **LEAN: UNDER**")
+                                    else:
+                                        st.info("🤷 **LEAN: PASS**")
+                                    
+                                    st.caption(f"Hit over {analysis['times_over']}/{analysis['games_analyzed']} times")
+                            else:
+                                st.warning("Stat type not available for this player")
+                                
+                except Exception as e:
+                    st.error(f"Error loading player data: {str(e)}")
+                    st.info("Player props feature is temporarily unavailable")
     
     # TAB 3: Parlays
     with betting_tab3:
