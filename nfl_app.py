@@ -173,8 +173,18 @@ def run():
                         rank = weak_teams.index(home) + 1
                         
                         # Get top player from away team at this position
+                        # Find the team column (could be 'recent_team', 'team', or 'team_abbr')
+                        team_col = None
+                        for col in ['recent_team', 'team', 'team_abbr']:
+                            if col in stats_df.columns:
+                                team_col = col
+                                break
+                        
+                        if team_col is None:
+                            continue
+                        
                         away_players = stats_df[
-                            (stats_df['recent_team'] == away) & 
+                            (stats_df[team_col] == away) & 
                             (stats_df['position'].isin(positions[pos]))
                         ]
                         
