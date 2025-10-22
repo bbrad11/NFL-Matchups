@@ -81,6 +81,20 @@ def run():
     season_display = st.sidebar.selectbox("Season", list(season_map.keys()), index=0)
     season = season_map[season_display]
     
+    st.sidebar.markdown("---")
+    
+    # Live Odds API
+    with st.sidebar.expander("💰 Live Odds (Optional)"):
+        st.markdown("""
+        Get live odds from The Odds API
+        - Sign up: [the-odds-api.com](https://the-odds-api.com/)
+        - Free tier: 500 requests/month
+        """)
+        odds_api_key = st.text_input("API Key", type="password", key="nba_odds_key")
+        
+        if odds_api_key:
+            st.success("✅ API key set! Check Live Odds tab")
+    
     # Position groups
     positions = {
         'Guard': ['G', 'PG', 'SG', 'G-F'],
@@ -137,14 +151,15 @@ def run():
     else:
         st.warning("⚠️ No player data available yet. Season may not have started.")
     
-    # Tabs - INCLUDING BEST BETS
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    # Tabs - INCLUDING LIVE ODDS
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "🏆 Best Bets",
+        "💰 Live Odds",
         "🛡️ Worst Defenses", 
         "🏀 Tonight's Games", 
         "🏆 Top Performers",
         "📊 Consistency",
-        "💰 Betting Tools"
+        "🎲 Betting Tools"
     ])
     
     # TAB 1: BEST BETS DASHBOARD
@@ -248,8 +263,86 @@ def run():
             else:
                 st.info("No high-confidence bets found for today's games. Check back closer to tip-off!")
     
-    # TAB 2: WORST DEFENSES
+    # TAB 2: LIVE ODDS
     with tab2:
+        st.header("💰 Live NBA Odds")
+        st.markdown("Compare odds across DraftKings, FanDuel, and BetMGM")
+        
+        if not odds_api_key:
+            st.info("👆 Enter your Odds API key in the sidebar to view live odds")
+            
+            st.markdown("""
+            ### Why Use Live Odds?
+            
+            ✅ **Find Best Lines** - Compare odds across sportsbooks  
+            ✅ **Spot Value** - Find +EV bets automatically  
+            ✅ **Track Line Movement** - See where sharp money is going  
+            ✅ **Player Props** - Get real prop lines from books  
+            
+            ### How to Get Started:
+            
+            1. Sign up at [the-odds-api.com](https://the-odds-api.com/) (FREE)
+            2. Get your API key from the dashboard
+            3. Enter it in the sidebar
+            4. Start comparing odds!
+            
+            **Free Tier:** 500 requests/month
+            """)
+        else:
+            if st.button("🔄 Fetch Live NBA Odds", key="fetch_nba_odds"):
+                with st.spinner("Fetching odds from sportsbooks..."):
+                    try:
+                        import requests
+                        
+                        url = 'https://api.the-odds-api.com/v4/sports/basketball_nba/odds/'
+                        params = {
+                            'apiKey': odds_api_key,
+                            'regions': 'us',
+                            'markets': 'h2h,spreads,totals',
+                            'oddsFormat': 'american',
+                            'bookmakers': 'draftkings,fanduel,betmgm'
+                        }
+                        
+                        response = requests.get(url, params=params, timeout=10)
+                        response.raise_for_status()
+                        
+                        games = response.json()
+                        
+                        if games:
+                            st.success(f"✅ Found odds for {len(games)} games")
+                            
+                            for game in games[:10]:  # Show up to 10 games
+                                with st.expander(f"{game['away_team']} @ {game['home_team']}"):
+                                    
+                                    for bookmaker in game.get('bookmakers', []):
+                                        st.markdown(f"**{bookmaker['title']}**")
+                                        
+                                        for market in bookmaker.get('markets', []):
+                                            if market['key'] == 'h2h':
+                                                st.write("Moneyline:")
+                                                for outcome in market['outcomes']:
+                                                    st.write(f"- {outcome['name']}: {outcome['price']:+}")
+                                            
+                                            elif market['key'] == 'spreads':
+                                                st.write("Spread:")
+                                                for outcome in market['outcomes']:
+                                                    st.write(f"- {outcome['name']} {outcome['point']:+.1f}: {outcome['price']:+}")
+                                            
+                                            elif market['key'] == 'totals':
+                                                st.write("Over/Under:")
+                                                for outcome in market['outcomes']:
+                                                    st.write(f"- {outcome['name']} {outcome['point']}: {outcome['price']:+}")
+                                        
+                                        st.markdown("---")
+                        else:
+                            st.info("No games with odds available right now. Check back on game days!")
+                            
+                    except Exception as e:
+                        st.error(f"Error fetching odds: {str(e)}")
+                        st.info("Make sure your API key is valid and you haven't exceeded your quota")
+    
+    # TAB 3: WORST DEFENSES
+    with tab3:
         st.header("Which Teams Give Up The Most?")
         st.markdown("Find defensive weaknesses to exploit")
         
@@ -295,8 +388,8 @@ def run():
             chart_data = defense_stats.sort_values('PPG', ascending=False).set_index('Team')['PPG']
             st.bar_chart(chart_data)
     
-    # TAB 3: TONIGHT'S GAMES
-    with tab3:
+    # TAB 4: TONIGHT'S GAMES
+    with tab4:
         st.header("🏀 Tonight's NBA Games")
         st.markdown("Find favorable matchups for your lineup")
         
@@ -339,8 +432,8 @@ def run():
                         else:
                             st.info("Player data loading...")
     
-    # TAB 4: TOP PERFORMERS
-    with tab4:
+    # TAB 5: TOP PERFORMERS
+    with tab5:
         st.header("Season Leaders")
         
         if player_logs.empty:
@@ -393,8 +486,8 @@ def run():
             chart_data = top_players.head(15).set_index('Player')[sort_col]
             st.bar_chart(chart_data)
     
-    # TAB 5: CONSISTENCY
-    with tab5:
+    # TAB 6: CONSISTENCY
+    with tab6:
         st.header("📊 Player Consistency Ratings")
         st.markdown("Find reliable players who perform night after night")
         
@@ -500,8 +593,8 @@ def run():
                     **Why it matters:** Consistent players are safer DFS plays, while high-ceiling players offer tournament upside.
                     """)
     
-    # TAB 6: BETTING TOOLS
-    with tab6:
+    # TAB 7: BETTING TOOLS
+    with tab7:
         render_betting_tab(sport="NBA", stats_df=player_logs, schedule_df=todays_games)
     
     # Footer
