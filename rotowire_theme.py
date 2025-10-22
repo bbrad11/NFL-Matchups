@@ -1,0 +1,2 @@
+from rotowire_theme import apply_rotowire_theme
+apply_rotowire_theme()
