@@ -14,36 +14,34 @@ def run():
     except ImportError:
         nba_api_available = False
     
-    # Custom CSS
+    # Custom CSS - RotoWire Dark Theme
     st.markdown("""
     <style>
+        .stApp {
+            background-color: #0A0E27;
+            color: #E8EAED;
+        }
+        
         .main h1 {
-            color: #C9082A;
-            font-size: 3rem !important;
-            font-weight: 800 !important;
-            margin-bottom: 0.5rem !important;
+            color: #FFFFFF !important;
+            font-size: 2.5rem !important;
+            font-weight: 700 !important;
+            border-bottom: 3px solid #F59E0B;
+            padding-bottom: 0.5rem;
         }
         
-        [data-testid="stMetricValue"] {
-            font-size: 2rem;
-            font-weight: 700;
+        .main h2, .main h3 {
+            color: #F59E0B !important;
         }
         
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 8px;
-        }
-        
-        .stTabs [data-baseweb="tab"] {
-            height: 50px;
-            background-color: #F3F4F6;
-            border-radius: 8px;
-            padding: 0 24px;
-            font-weight: 600;
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #0D1B2A 0%, #0A0E27 100%);
         }
         
         .stTabs [aria-selected="true"] {
-            background-color: #C9082A;
-            color: white;
+            background-color: #0A0E27 !important;
+            color: #F59E0B !important;
+            border-bottom: 3px solid #F59E0B;
         }
         
         .best-bet-card {
@@ -53,11 +51,6 @@ def run():
             margin: 1rem 0;
             color: white;
             box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-        }
-        
-        .best-bet-card h3 {
-            color: white;
-            margin: 0 0 0.5rem 0;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -312,7 +305,7 @@ def run():
         
         if todays_games.empty:
             st.info("No games scheduled for today. Check back on game days!")
-            st.markdown("**NBA Season 2024-25 starts October 21, 2025** 🏀")
+            st.markdown("**NBA Season 2024-25 starts October 22, 2024** 🏀")
         else:
             st.success(f"✅ {len(todays_games)} games today!")
             
@@ -516,7 +509,7 @@ def run():
     st.markdown("""
         <div style='text-align: center; color: #6B7280;'>
             📊 Data: NBA Stats API | Updated daily during NBA season<br>
-            <small>Season 2024-25 starts October 21, 2025</small>
+            <small>Season 2024-25 starts October 22, 2024</small>
         </div>
     """, unsafe_allow_html=True)
 
