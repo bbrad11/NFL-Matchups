@@ -14,7 +14,7 @@ class OddsScraper:
     """
     
     def __init__(self):
-        self.api_key = None  # For paid APIs
+        self.api_key = aaaf63513b0793d50a5860271117a8d0  # For paid APIs
         
     # ============================================================
     # METHOD 1: The Odds API (Recommended - Free Tier Available)
