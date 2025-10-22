@@ -6,36 +6,84 @@ from betting_analyzer import render_betting_tab, BettingAnalyzer
 def run():
     """Main NFL app function"""
     
-    # Custom CSS for modern look
+    # Apply RotoWire theme
     st.markdown("""
     <style>
-        .main h1 {
-            color: #1E3A8A;
-            font-size: 3rem !important;
-            font-weight: 800 !important;
-            margin-bottom: 0.5rem !important;
+        /* RotoWire-Inspired Dark Theme */
+        .stApp {
+            background-color: #0A0E27;
+            color: #E8EAED;
         }
         
-        [data-testid="stMetricValue"] {
-            font-size: 2rem;
-            font-weight: 700;
+        .main .block-container {
+            max-width: 1400px;
+        }
+        
+        .main h1 {
+            color: #FFFFFF !important;
+            font-size: 2.5rem !important;
+            font-weight: 700 !important;
+            border-bottom: 3px solid #10B981;
+            padding-bottom: 0.5rem;
+        }
+        
+        .main h2, .main h3 {
+            color: #10B981 !important;
+        }
+        
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #0D1B2A 0%, #0A0E27 100%);
+            border-right: 1px solid #1E3A5F;
+        }
+        
+        [data-testid="stSidebar"] * {
+            color: #E8EAED !important;
         }
         
         .stTabs [data-baseweb="tab-list"] {
-            gap: 8px;
+            background-color: #0D1B2A;
+            border-radius: 8px 8px 0 0;
         }
         
         .stTabs [data-baseweb="tab"] {
-            height: 50px;
-            background-color: #F3F4F6;
-            border-radius: 8px;
-            padding: 0 24px;
+            background-color: #162236;
+            color: #78909C;
+            border-radius: 8px 8px 0 0;
             font-weight: 600;
         }
         
+        .stTabs [data-baseweb="tab"]:hover {
+            background-color: #1E3A5F;
+            color: #10B981;
+        }
+        
         .stTabs [aria-selected="true"] {
-            background-color: #1E3A8A;
-            color: white;
+            background-color: #0A0E27 !important;
+            color: #10B981 !important;
+            border-bottom: 3px solid #10B981;
+        }
+        
+        .dataframe {
+            background-color: #0D1B2A !important;
+            border: 1px solid #1E3A5F !important;
+            font-size: 0.85rem !important;
+        }
+        
+        .dataframe th {
+            background-color: #162236 !important;
+            color: #10B981 !important;
+            font-weight: 700 !important;
+        }
+        
+        .dataframe td {
+            background-color: #0A0E27 !important;
+            color: #E8EAED !important;
+        }
+        
+        [data-testid="stMetricValue"] {
+            font-size: 2rem !important;
+            font-weight: 700 !important;
+            color: #10B981 !important;
         }
         
         .best-bet-card {
@@ -48,8 +96,25 @@ def run():
         }
         
         .best-bet-card h3 {
-            color: white;
+            color: white !important;
             margin: 0 0 0.5rem 0;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #0D1B2A 0%, #162236 100%);
+            border: 1px solid #1E3A5F;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .stButton > button {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
         }
     </style>
     """, unsafe_allow_html=True)
