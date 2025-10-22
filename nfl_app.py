@@ -134,6 +134,20 @@ def run():
     season = st.sidebar.selectbox("Season", [2025, 2024, 2023], index=0)
     current_week = st.sidebar.slider("Week", 1, 18, 7)
     
+    st.sidebar.markdown("---")
+    
+    # Live Odds API
+    with st.sidebar.expander("💰 Live Odds (Optional)"):
+        st.markdown("""
+        Get live odds from The Odds API
+        - Sign up: [the-odds-api.com](https://the-odds-api.com/)
+        - Free tier: 500 requests/month
+        """)
+        odds_api_key = st.text_input("API Key", type="password", key="nfl_odds_key")
+        
+        if odds_api_key:
+            st.success("✅ API key set! Check Betting Tools tab")
+    
     # Cache data loading
     @st.cache_data
     def load_nfl_data(season):
@@ -187,15 +201,16 @@ def run():
         
         return defense_stats
     
-    # Tabs - NOW INCLUDING BETTING AND BEST BETS
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    # Tabs - NOW INCLUDING LIVE ODDS
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "🏆 Best Bets",
+        "💰 Live Odds",
         "🛡️ Worst Defenses", 
         "🔥 This Week's Matchups", 
         "🏆 Top Scorers",
         "📊 Consistency",
         "⚡ NextGen Stats",
-        "💰 Betting Tools"
+        "🎲 Betting Tools"
     ])
     
     # TAB 1: BEST BETS DASHBOARD
@@ -345,7 +360,85 @@ def run():
             else:
                 st.info("No strong bet opportunities found this week. Check back closer to game time!")
     
-    # TAB 2: WORST DEFENSES
+    # TAB 2: LIVE ODDS
+    with tab3:
+        st.header("💰 Live NFL Odds")
+        st.markdown("Compare odds across DraftKings, FanDuel, and BetMGM")
+        
+        if not odds_api_key:
+            st.info("👆 Enter your Odds API key in the sidebar to view live odds")
+            
+            st.markdown("""
+            ### Why Use Live Odds?
+            
+            ✅ **Find Best Lines** - Compare odds across sportsbooks  
+            ✅ **Spot Value** - Find +EV bets automatically  
+            ✅ **Track Line Movement** - See where sharp money is going  
+            ✅ **Arbitrage** - Find guaranteed profit opportunities  
+            
+            ### How to Get Started:
+            
+            1. Sign up at [the-odds-api.com](https://the-odds-api.com/) (FREE)
+            2. Get your API key from the dashboard
+            3. Enter it in the sidebar
+            4. Start comparing odds!
+            
+            **Free Tier:** 500 requests/month (plenty for weekly analysis)
+            """)
+        else:
+            if st.button("🔄 Fetch Live Odds"):
+                with st.spinner("Fetching odds from sportsbooks..."):
+                    try:
+                        import requests
+                        
+                        url = 'https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/'
+                        params = {
+                            'apiKey': odds_api_key,
+                            'regions': 'us',
+                            'markets': 'h2h,spreads,totals',
+                            'oddsFormat': 'american',
+                            'bookmakers': 'draftkings,fanduel,betmgm'
+                        }
+                        
+                        response = requests.get(url, params=params, timeout=10)
+                        response.raise_for_status()
+                        
+                        games = response.json()
+                        
+                        if games:
+                            st.success(f"✅ Found odds for {len(games)} games")
+                            
+                            for game in games[:5]:  # Show first 5 games
+                                with st.expander(f"{game['away_team']} @ {game['home_team']}"):
+                                    
+                                    for bookmaker in game.get('bookmakers', []):
+                                        st.markdown(f"**{bookmaker['title']}**")
+                                        
+                                        for market in bookmaker.get('markets', []):
+                                            if market['key'] == 'h2h':
+                                                st.write("Moneyline:")
+                                                for outcome in market['outcomes']:
+                                                    st.write(f"- {outcome['name']}: {outcome['price']:+}")
+                                            
+                                            elif market['key'] == 'spreads':
+                                                st.write("Spread:")
+                                                for outcome in market['outcomes']:
+                                                    st.write(f"- {outcome['name']} {outcome['point']:+.1f}: {outcome['price']:+}")
+                                            
+                                            elif market['key'] == 'totals':
+                                                st.write("Over/Under:")
+                                                for outcome in market['outcomes']:
+                                                    st.write(f"- {outcome['name']} {outcome['point']}: {outcome['price']:+}")
+                                        
+                                        st.markdown("---")
+                        else:
+                            st.info("No games with odds available right now")
+                            
+                    except Exception as e:
+                        st.error(f"Error fetching odds: {str(e)}")
+                        st.info("Make sure your API key is valid and you haven't exceeded your quota")
+    
+    # TAB 3: WORST DEFENSES (was tab2)
     with tab2:
         st.header("Which Defenses Give Up The Most?")
         st.markdown("Higher numbers = easier matchup for offensive players")
@@ -409,8 +502,8 @@ def run():
             chart_data = defense_stats.head(15).set_index('Defense')[sort_col]
             st.bar_chart(chart_data)
     
-    # TAB 3: THIS WEEK'S MATCHUPS
-    with tab3:
+    # TAB 4: THIS WEEK'S MATCHUPS
+    with tab4:
         st.header(f"Week {current_week} Games")
         st.markdown("Find favorable matchups where strong offenses meet weak defenses")
         
@@ -454,8 +547,8 @@ def run():
                                 rank = weak_teams.index(away) + 1
                                 st.success(f"✅ {pos}: Good matchup (vs #{rank} worst defense)")
     
-    # TAB 4: TOP SCORERS
-    with tab4:
+    # TAB 5: TOP SCORERS
+    with tab5:
         st.header("Season Leaders")
         
         time_filter_leaders = st.radio(
@@ -571,8 +664,8 @@ def run():
             else:
                 st.info("No TE data available")
     
-    # TAB 5: CONSISTENCY
-    with tab5:
+    # TAB 6: CONSISTENCY
+    with tab6:
         st.header("📊 Player Consistency Ratings")
         st.markdown("Find reliable players who perform week after week")
         
@@ -643,8 +736,8 @@ def run():
                     **Range:** Difference between ceiling and floor
                     """)
     
-    # TAB 6: NEXTGEN STATS
-    with tab6:
+    # TAB 7: NEXTGEN STATS
+    with tab7:
         st.header("⚡ NextGen Stats")
         st.markdown("Advanced metrics from NFL's player tracking system")
         
@@ -686,8 +779,8 @@ def run():
                 st.write(nextgen_df.columns.tolist())
                 st.dataframe(nextgen_df.head(20), use_container_width=True)
     
-    # TAB 7: BETTING TOOLS
-    with tab7:
+    # TAB 8: BETTING TOOLS
+    with tab8:
         render_betting_tab(sport="NFL", stats_df=stats_df, schedule_df=schedule_df)
     
     # Footer
